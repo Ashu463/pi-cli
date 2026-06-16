@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "types": ["bun"],
+    "skipLibCheck": true,
+    "noEmit": true,
+    "baseUrl": "./src", // This must be specified if "paths" is.
+    "paths": {
+      "express": ["../node_modules/express/lib/express"], // This mapping is relative to "baseUrl"
+      "@repo/core": ["packages/core/index.ts"],
+      "@repo/core/*": ["packages/core/*"]
+    },
+    "ignoreDeprecations": "6.0"
+  },
+  "include": ["src/**/*.ts", "src/index.ts"]
+}

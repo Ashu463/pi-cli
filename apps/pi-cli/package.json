@@ -1,0 +1,24 @@
+{
+  "name": "pi-cli",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "scripts": {
+    "build": "bun build --target bun src/index.ts --outfile dist/index.js"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
+    "@repo/core": "*",
+    "axios": "^1.17.0",
+    "commander": "^15.0.0"
+  },
+  "main": "dist/index.js",
+  "bin": {
+    "pi-cli": "./src/index.ts"
+  }
+}

@@ -1,0 +1,155 @@
+import { getAllTools } from "../tools";
+import { LLMCall } from "./llm";
+import { AgentRequest, LLMContext, LLMRequest, LLMResponse, ToolName } from "./model";
+import { bashTool, editFileTool, readFileTool, writeFileTool } from "./tools";
+// import { AgentContext, AgentRequest, LLMContext, LLMRequest, LLMResponse, Tool } from "./types";
+/*
+- fetch data in form of LLMRequest
+- inject system prompt to the user prompt
+- run loop here with these params
+
+*/
+const systemPrompt = `You are an expert coding assistant. You help users
+with coding tasks by reading files, executing commands, 
+editing code and writing new files
+Available Tools: 
+- read: Read file contents
+- bash: Execute bash commands
+- edit: Make surgical edits to the files
+- write: Create or overwrite files
+
+Guidelines
+- Use bash for file operations like ls, grep, find
+- Use read to examine files before editing
+- Use edit for precise changes
+- Use write only for new files or complete new writes
+- Be concise with your responses
+`
+
+export async function AgentCall(req: AgentRequest){
+
+  // refactoring or (mp normalizing) the prompt
+  // adding this prompt into context or it's summary version
+  // make the LLM call
+  // judege whether the response happened due to tool call or completed
+  // fetch the tool calls needed. 
+  // execute the tool calls
+  // save their results 
+  // repeat the process. 
+
+  let firstTurn = true;
+  let ToolResult :string = ""
+  let finalOutput : string = ""
+  
+  // while (true) {
+    let hasMoreToolCalls = true
+
+    while (hasMoreToolCalls) {
+      if(!firstTurn){
+        req.message += ToolResult
+      }
+      else firstTurn = false;
+
+      console.log(req.message, " is the message with which LLM called")
+      const response: LLMResponse = await streamLLM(req)
+      console.log(response, " is the reponse from LLM inside runLooop")
+
+      if (response.stopReason === 'aborted') {
+        console.log("stopping LLM due to aborting")
+        return finalOutput
+      }
+      // var context: AgentContext[]
+      if (response.stopReason === 'toolCall') {
+        console.log("Inside tool call handling of runLoop", response.output)
+        // extract tool calls from response
+        // execute each tool
+        // append results to context
+
+        // context!.push({
+        //   role: "assistant",
+        //   content: response.output_text
+        // })
+
+        // 2. execute each requested tool
+        if(response.toolCalls){
+          for(const call of response.toolCalls){
+            switch(call.name){
+              case "read":
+                ToolResult = await readFileTool.execute(call.input)
+                break;
+              case "write":
+                ToolResult = await writeFileTool.execute(call.input)
+                break;
+              case "edit":
+                ToolResult = await editFileTool.execute(call.input)
+                break;
+              case "bash":
+                ToolResult = await bashTool.execute(call.input)
+                break;
+
+              default:
+                ToolResult = `Unknown tool: ${call.name}`
+            }
+
+            console.log(ToolResult, " is the result")
+
+          }
+        }
+
+        // for (const call of toolCalls) {
+        //   const tool = req.tools.find(t => t.name === call.name)
+
+        //   let result: string
+        //   if (!tool) {
+        //     result = `Error: tool "${call.name}" not found`
+        //   } else {
+        //     try {
+        //       result = await tool.execute(call.input)
+        //     } catch (e) {
+        //       result = `Error executing ${call.name}: ${(e as Error).message}`
+        //     }
+        //   }
+
+        //   // 3. append tool result into context so the next LLM call sees it
+        //   context!.push({
+        //     role: "tool_result",
+        //     content: JSON.stringify({ tool_call_id: call.id, name: call.name, output: result })
+        //   })
+        // }
+      } else {
+          // context!.push({
+          //   role: "assistant",
+          //   content: response.output_text
+          // })
+        // 'completed' — push assistant message to context
+        hasMoreToolCalls = false
+        finalOutput = response.output
+      }
+      // hasMoreToolCalls = false; // temp cond
+    }
+
+  //   break;
+
+  //   // outer loop: wait for next user input / steering / followup
+  // }
+  return finalOutput
+}
+const availableTools: ToolName[] = ["bash", "edit", "read", "write"]
+async function streamLLM(req: AgentRequest): Promise<LLMResponse> {
+  // TODO: apply context if configured
+  // convert to LLM compatible msgs. ~ not needed in our case. 
+  // build LLM context, system, user prompt and tools
+  const llmContext: LLMContext = {
+    systemPrompt: systemPrompt,
+    content: req.message,
+    tools: availableTools
+  }
+  const llmReq: LLMRequest = { ...req, llmContext }
+
+  try {
+    const response = await LLMCall(llmReq)
+    return response
+  } catch (e) {
+    throw new Error("Error while fetching the response")
+  }
+}
