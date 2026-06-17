@@ -2,12 +2,10 @@ import { Command } from "commander";
 import os from 'os'
 import path from 'path'
 import fs from 'fs'
+import { authFile, modelsFile, rootPath } from "./config";
 
-export const rootPath = path.join(os.homedir(), ".pi-cli")
-export const authFile = path.join(rootPath, 'auth.json')
 fs.mkdirSync(rootPath, { recursive: true });
 
-export const modelsFile = path.join(rootPath, 'models.json')
 
 async function ValidateAPIKey(key: string, provider: string): Promise<boolean>{
     let url = ""
@@ -22,7 +20,6 @@ async function ValidateAPIKey(key: string, provider: string): Promise<boolean>{
             obj = [obj]
         }
     }
-
 
     if(provider === "openai"){
         console.log("inside openai checker")

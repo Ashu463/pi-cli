@@ -1,5 +1,5 @@
 
-import { Tool } from "../model"
+import { Tool } from "../models/model"
 import { Bash, EditFile, ReadFile, WriteFile } from "./tools"
 
 export const readFileTool: Tool = {

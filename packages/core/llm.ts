@@ -21,7 +21,7 @@ import { AnthropicCall } from "./providers/anthropic";
 import { OpenAICall } from "./providers/openai";
 import { DeepseekCall } from './providers/deepseek'
 // import { LLMRequest, LLMResponse, Tool } from "./types";
-import { LLMRequest, LLMResponse, Tool, ToolCall, ToolName } from "./model";
+import { LLMRequest, LLMResponse, Tool, ToolCall, ToolName } from "./models/model";
 
 const availableTools: ToolName[] = ["bash", "edit", "read", "write"]
 

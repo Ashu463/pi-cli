@@ -1,6 +1,6 @@
 // import { AgentContext, LLMContext, Tool } from "../types";
 import OpenAI from 'openai'
-import { LLMContext, ToolName } from '../model';
+import { LLMContext, ToolName } from '../models/model';
 
 
 const deepseekTools: OpenAI.Chat.ChatCompletionTool[] = [

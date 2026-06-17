@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { modelsFile } from "./login";
+import { modelsFile } from "./config";
 import fs from 'fs'
 export const listModel = new Command("list")
     .action((options) =>{

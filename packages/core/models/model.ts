@@ -19,7 +19,7 @@ export interface LLMContext{
 }
 
 export type ToolName = "read" | "write" | "edit" | "bash"
-type stopReason = "completed" | "toolCall" | "aborted"
+type stopReason = "completed" | "toolCall" | "aborted" | "error"
 export interface LLMResponse{
     output: string
     stopReason: stopReason

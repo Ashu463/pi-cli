@@ -1,6 +1,8 @@
+import { randomUUID } from "crypto";
 import { getAllTools } from "../tools";
 import { LLMCall } from "./llm";
-import { AgentRequest, LLMContext, LLMRequest, LLMResponse, ToolName } from "./model";
+import { AgentResponse, SessionData } from "./models/clientTypes";
+import { AgentRequest, LLMContext, LLMRequest, LLMResponse, ToolName } from "./models/model";
 import { bashTool, editFileTool, readFileTool, writeFileTool } from "./tools";
 // import { AgentContext, AgentRequest, LLMContext, LLMRequest, LLMResponse, Tool } from "./types";
 /*
@@ -26,7 +28,7 @@ Guidelines
 - Be concise with your responses
 `
 
-export async function AgentCall(req: AgentRequest){
+export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
 
   // refactoring or (mp normalizing) the prompt
   // adding this prompt into context or it's summary version
@@ -40,7 +42,18 @@ export async function AgentCall(req: AgentRequest){
   let firstTurn = true;
   let ToolResult :string = ""
   let finalOutput : string = ""
+  let agentRes: AgentResponse 
   
+  let data: SessionData[] = []
+  // first create session
+  data.push({
+    id: randomUUID(),
+    parentId: "random-abhi-ke-liye",
+    timestamp: new Date().toISOString(),
+    type: "session",
+    sessionId: req.sessionId,
+    cwd: req.cwd
+  })
   // while (true) {
     let hasMoreToolCalls = true
 
@@ -56,7 +69,33 @@ export async function AgentCall(req: AgentRequest){
 
       if (response.stopReason === 'aborted') {
         console.log("stopping LLM due to aborting")
-        return finalOutput
+        agentRes = {message: "Task aborted", data: null}
+        data.push({
+          id: "chota id",
+          parentId: "randome abhi ke liye",
+          type: 'message',
+          role: 'assitant',
+          message: {
+            input: 'asdfasdf'
+          },
+          timestamp: new Date().toISOString()
+        })
+        return agentRes
+      }
+      if(response.stopReason === 'error'){
+        console.log("stopping LLM due to error")
+        agentRes = {message: "Error occurred", data: null}
+        data.push({
+          id: "chota id",
+          parentId: "randome abhi ke liye",
+          type: 'message',
+          role: 'assitant',
+          message: {
+            input: 'asdfasdf'
+          },
+          timestamp: new Date().toISOString()
+        })
+        return agentRes
       }
       // var context: AgentContext[]
       if (response.stopReason === 'toolCall') {
@@ -64,12 +103,9 @@ export async function AgentCall(req: AgentRequest){
         // extract tool calls from response
         // execute each tool
         // append results to context
-
-        // context!.push({
-        //   role: "assistant",
+        // context!.push({//   role: "assistant",
         //   content: response.output_text
         // })
-
         // 2. execute each requested tool
         if(response.toolCalls){
           for(const call of response.toolCalls){
@@ -90,9 +126,19 @@ export async function AgentCall(req: AgentRequest){
               default:
                 ToolResult = `Unknown tool: ${call.name}`
             }
-
             console.log(ToolResult, " is the result")
-
+            data.push({
+              id: "asdf",
+              parentId: "asdf",
+              timestamp: new Date().toISOString(),
+              type: 'message',
+              role: 'toolCall',
+              message:{
+                toolCallId: ToolResult.id,
+                toolName: ToolResult.name,
+                content: ToolResult.content
+              }
+            })
           }
         }
 
@@ -132,7 +178,7 @@ export async function AgentCall(req: AgentRequest){
 
   //   // outer loop: wait for next user input / steering / followup
   // }
-  return finalOutput
+  return agentRes
 }
 const availableTools: ToolName[] = ["bash", "edit", "read", "write"]
 async function streamLLM(req: AgentRequest): Promise<LLMResponse> {

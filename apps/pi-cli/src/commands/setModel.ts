@@ -1,9 +1,8 @@
 import { Command } from "commander";
 import fs from  'fs'
 import path from 'path'
-import { authFile, modelsFile, rootPath } from "./login";
+import { authFile, modelsFile, rootPath, settingsFile } from "./config";
 
-export const settingsFile = path.join(rootPath, 'settings.json')
 
 export const setModel = new Command("set")
     .description('set')
