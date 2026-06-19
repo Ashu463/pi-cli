@@ -1,6 +1,5 @@
 import { Command } from "commander";
 import fs from  'fs'
-import path from 'path'
 import { authFile, modelsFile, rootPath, settingsFile } from "./config";
 
 

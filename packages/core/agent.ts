@@ -47,14 +47,17 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
   let data: SessionData[] = []
   // 
   // first create session
-  data.push({
-    id: randomUUID(),
-    parentId: "random-abhi-ke-liye",
-    timestamp: new Date().toISOString(),
-    type: "session",
-    sessionId: req.sessionId,
-    cwd: req.cwd
-  })
+  if(req.sessionId){
+    data.push({
+      id: randomUUID(),
+      parentId: "random-abhi-ke-liye",
+      timestamp: new Date().toISOString(),
+      type: "session",
+      sessionId: req.sessionId,
+      cwd: req.cwd
+    })
+  }
+  
   // while (true) {
     let hasMoreToolCalls = true
 
@@ -134,7 +137,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
               }
               data.push({
                 id: randomBytes(4).toString(),
-                parentId: "asdf",
+                parentId: "asdf", // #TODO: implement tree and store prev node id here.
                 timestamp: new Date().toISOString(),
                 type: 'message',
                 role: 'toolCall',
@@ -151,7 +154,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
             catch(e){
               data.push({
                 id: randomBytes(4).toString(),
-                parentId: "asdf",
+                parentId: "asdf", // #TODO: implement tree and store prev node id here.
                 timestamp: new Date().toISOString(),
                 type: 'message',
                 role: 'toolCall',

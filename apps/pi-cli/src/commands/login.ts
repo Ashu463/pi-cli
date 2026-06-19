@@ -175,11 +175,6 @@ export const login = new Command("login").description('login command')
                     if (!Array.isArray(obj)) {
                         obj = [obj]; // wrap existing object in an array
                     }
-
-                    // try {
-                    // } catch {
-                    //     obj = [];
-                    // }
                 }
                 obj.push({
                     api_key: apiKey,
