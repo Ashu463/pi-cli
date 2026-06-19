@@ -4,6 +4,8 @@ export interface AgentRequest{
     provider: string
     model: string,
     apiKey: string,
+    sessionId: string,
+    cwd: string
 }
 
 export interface LLMRequest{

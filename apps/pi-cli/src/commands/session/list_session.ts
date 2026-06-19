@@ -9,7 +9,6 @@ export const listSessions = new Command("list")
             console.log("No any sessions right now")
             return 
         }
-        const data = JSON.parse(fs.readFileSync(sessionPath, 'utf-8'))
-        const response = getAllSessions();
+        const response: Promise<string[]> = getAllSessions(sessionPath);
         console.log(response, " are all the sessions")
     })

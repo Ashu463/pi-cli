@@ -2,8 +2,8 @@ import { Tool } from "./model"
 
 
 export interface AgentResponse{
-    // message: string
-    data: SessionData[] | null
+    message: string
+    data: SessionData[]
 }
 export interface SessionDatabase{
     id: string
@@ -40,7 +40,6 @@ export interface assistant{
     toolCalls?: Tool[]
 }
 export interface toolResult{
-    toolCallId: string
     toolName: string
     content: ToolContent
 }

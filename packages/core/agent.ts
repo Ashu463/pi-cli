@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { getAllTools } from "../tools";
 import { LLMCall } from "./llm";
 import { AgentResponse, SessionData } from "./models/clientTypes";
@@ -45,6 +45,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
   let agentRes: AgentResponse 
   
   let data: SessionData[] = []
+  // 
   // first create session
   data.push({
     id: randomUUID(),
@@ -69,9 +70,8 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
 
       if (response.stopReason === 'aborted') {
         console.log("stopping LLM due to aborting")
-        agentRes = {message: "Task aborted", data: null}
         data.push({
-          id: "chota id",
+          id: randomBytes(4).toString(),
           parentId: "randome abhi ke liye",
           type: 'message',
           role: 'assitant',
@@ -80,13 +80,15 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
           },
           timestamp: new Date().toISOString()
         })
-        return agentRes
+        return {
+          message: "LLM aborted",
+          data: data
+        }
       }
       if(response.stopReason === 'error'){
         console.log("stopping LLM due to error")
-        agentRes = {message: "Error occurred", data: null}
         data.push({
-          id: "chota id",
+          id: randomBytes(4).toString(),
           parentId: "randome abhi ke liye",
           type: 'message',
           role: 'assitant',
@@ -95,7 +97,10 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
           },
           timestamp: new Date().toISOString()
         })
-        return agentRes
+        return {
+          message: "Error occurred",
+          data: data
+        }
       }
       // var context: AgentContext[]
       if (response.stopReason === 'toolCall') {
@@ -109,36 +114,59 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         // 2. execute each requested tool
         if(response.toolCalls){
           for(const call of response.toolCalls){
-            switch(call.name){
-              case "read":
-                ToolResult = await readFileTool.execute(call.input)
-                break;
-              case "write":
-                ToolResult = await writeFileTool.execute(call.input)
-                break;
-              case "edit":
-                ToolResult = await editFileTool.execute(call.input)
-                break;
-              case "bash":
-                ToolResult = await bashTool.execute(call.input)
-                break;
-
-              default:
-                ToolResult = `Unknown tool: ${call.name}`
+            try{
+              switch(call.name){
+                case "read":
+                  ToolResult = await readFileTool.execute(call.input)
+                  break;
+                case "write":
+                  ToolResult = await writeFileTool.execute(call.input)
+                  break;
+                case "edit":
+                  ToolResult = await editFileTool.execute(call.input)
+                  break;
+                case "bash":
+                  ToolResult = await bashTool.execute(call.input)
+                  break;
+  
+                default:
+                  ToolResult = `Unknown tool: ${call.name}`
+              }
+              data.push({
+                id: randomBytes(4).toString(),
+                parentId: "asdf",
+                timestamp: new Date().toISOString(),
+                type: 'message',
+                role: 'toolCall',
+                message:{
+                  toolName: call.name,
+                  content: {
+                    text: ToolResult,
+                    isError: false,
+                    timestamp: new Date().getTime()
+                  }
+                }
+              })
+            }
+            catch(e){
+              data.push({
+                id: randomBytes(4).toString(),
+                parentId: "asdf",
+                timestamp: new Date().toISOString(),
+                type: 'message',
+                role: 'toolCall',
+                message:{
+                  toolName: call.name,
+                  content: {
+                    text: ToolResult,
+                    isError: false,
+                    timestamp: new Date().getTime()
+                  }
+                }
+              })
             }
             console.log(ToolResult, " is the result")
-            data.push({
-              id: "asdf",
-              parentId: "asdf",
-              timestamp: new Date().toISOString(),
-              type: 'message',
-              role: 'toolCall',
-              message:{
-                toolCallId: ToolResult.id,
-                toolName: ToolResult.name,
-                content: ToolResult.content
-              }
-            })
+            
           }
         }
 
@@ -178,7 +206,10 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
 
   //   // outer loop: wait for next user input / steering / followup
   // }
-  return agentRes
+  return {
+    message: ToolResult,
+    data: data
+  }
 }
 const availableTools: ToolName[] = ["bash", "edit", "read", "write"]
 async function streamLLM(req: AgentRequest): Promise<LLMResponse> {
