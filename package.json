@@ -20,5 +20,9 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "dependencies": {
+    "@types/node": "^26.0.0",
+    "mem0ai": "^3.0.9"
+  }
 }
