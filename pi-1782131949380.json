@@ -1,0 +1,67 @@
+[
+  {
+    "id": "X]��",
+    "parentId": "randome abhi ke liye",
+    "type": "message",
+    "role": "user",
+    "message": {
+      "type": "text",
+      "content": "current exact weather of noida in one line"
+    },
+    "timestamp": "2026-06-22T12:39:04.722Z"
+  },
+  {
+    "id": "h\u0019�i",
+    "parentId": "random id for now",
+    "type": "message",
+    "role": "assistant",
+    "message": {
+      "content": "I can help you with coding tasks, but checking the weather is not a coding task. However, I can write a quick script to fetch the weather for you using an API.\n\nLet me try using a command-line approach:",
+      "toolCalls": [
+        {
+          "id": "call_00_Td7fFwHW3dPxyZ3V5VqE6665",
+          "name": "bash",
+          "input": {
+            "command": "curl -s \"wttr.in/Noida?format=%C+%t+%w+%h\" 2>/dev/null || echo \"Could not fetch weather\""
+          }
+        }
+      ]
+    },
+    "timestamp": "2026-06-22T12:39:06.923Z"
+  },
+  {
+    "id": "C�\u0002�",
+    "parentId": "asdf",
+    "timestamp": "2026-06-22T12:39:07.538Z",
+    "type": "message",
+    "role": "toolCall",
+    "message": {
+      "toolName": "bash",
+      "content": {
+        "text": "Exit code: 0 \n Partly cloudy +36°C ↘19km/h 33%",
+        "isError": false,
+        "timestamp": 1782131947538
+      }
+    }
+  },
+  {
+    "id": "s�J�",
+    "parentId": "random id for now",
+    "type": "message",
+    "role": "assistant",
+    "message": {
+      "content": "I'm an AI coding assistant. I can help you with coding tasks. The weather information you got is:\n\n**Partly cloudy +36°C, wind ↘19km/h, humidity 33%** - that's the current weather in Noida.\n\nHow can I help you with coding today?"
+    },
+    "timestamp": "2026-06-22T12:39:09.378Z"
+  },
+  {
+    "id": "\u0002��\u0002",
+    "parentId": "random id for now",
+    "type": "message",
+    "role": "assistant",
+    "message": {
+      "content": "I'm an AI coding assistant. I can help you with coding tasks. The weather information you got is:\n\n**Partly cloudy +36°C, wind ↘19km/h, humidity 33%** - that's the current weather in Noida.\n\nHow can I help you with coding today?"
+    },
+    "timestamp": "2026-06-22T12:39:09.378Z"
+  }
+]
