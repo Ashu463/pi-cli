@@ -1,4 +1,4 @@
-import { Tool } from "./model"
+import { Tool, ToolCall } from "./model"
 
 
 export interface AgentResponse{
@@ -30,14 +30,14 @@ export interface message extends SessionDatabase{
     role: Role
     message: user | assistant | toolResult
 }
-type Role = "user" | "assitant" | "toolCall"
+type Role = "user" | "assistant" | "toolCall"
 export interface user{
     type: Type
-    text: string
+    content: string
 }
 export interface assistant{
-    input: string
-    toolCalls?: Tool[]
+    content: string
+    toolCalls?: ToolCall[]
 }
 export interface toolResult{
     toolName: string

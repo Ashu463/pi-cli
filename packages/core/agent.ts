@@ -1,32 +1,19 @@
 import { randomBytes, randomUUID } from "crypto";
 import { getAllTools } from "../tools";
 import { LLMCall } from "./llm";
-import { AgentResponse, SessionData } from "./models/clientTypes";
-import { AgentRequest, LLMContext, LLMRequest, LLMResponse, ToolName } from "./models/model";
+import { AgentResponse, message, SessionData } from "./models/clientTypes";
+import { AgentRequest, LLMContext, LLMRequest, LLMResponse, Message, ToolName } from "./models/model";
 import { bashTool, editFileTool, readFileTool, writeFileTool } from "./tools";
-// import { AgentContext, AgentRequest, LLMContext, LLMRequest, LLMResponse, Tool } from "./types";
+import { systemPrompt } from "./config";
+import { addMemory, searchMemory } from "./memory";
 /*
 - fetch data in form of LLMRequest
 - inject system prompt to the user prompt
 - run loop here with these params
-
+- store into the sessions array
+- update the memory 
+- update context. 
 */
-const systemPrompt = `You are an expert coding assistant. You help users
-with coding tasks by reading files, executing commands, 
-editing code and writing new files
-Available Tools: 
-- read: Read file contents
-- bash: Execute bash commands
-- edit: Make surgical edits to the files
-- write: Create or overwrite files
-
-Guidelines
-- Use bash for file operations like ls, grep, find
-- Use read to examine files before editing
-- Use edit for precise changes
-- Use write only for new files or complete new writes
-- Be concise with your responses
-`
 
 export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
 
@@ -56,8 +43,20 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
       sessionId: req.sessionId,
       cwd: req.cwd
     })
-  }
-  
+  }  
+  data.push({
+    id: randomBytes(4).toString(),
+    parentId: "randome abhi ke liye", // #TODO: implement tree and store prev node id here.
+    type: "message",
+    role: "user",
+    message: {
+      type: "text",
+      content: req.message
+    },
+    timestamp: new Date().toISOString()
+  })
+  const relevantMemories = searchMemory(req.message);
+  console.log(relevantMemories, " is the fetched memory")
   // while (true) {
     let hasMoreToolCalls = true
 
@@ -70,16 +69,27 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
       console.log(req.message, " is the message with which LLM called")
       const response: LLMResponse = await streamLLM(req)
       console.log(response, " is the reponse from LLM inside runLooop")
-
+      data.push({
+        id: randomBytes(4).toString(),
+        parentId: "random id for now",
+        type: 'message',
+        role: 'assistant',
+        message: {
+          content: response.output,
+          toolCalls: response.toolCalls
+        },
+        timestamp: new Date().toISOString()
+      })
       if (response.stopReason === 'aborted') {
         console.log("stopping LLM due to aborting")
+        
         data.push({
           id: randomBytes(4).toString(),
-          parentId: "randome abhi ke liye",
-          type: 'message',
-          role: 'assitant',
+          parentId: "randome abhi ke liye", // #TODO: implement tree and store prev node id here.
+          type: "message",
+          role: "assistant",
           message: {
-            input: 'asdfasdf'
+            content: "LLM call aborted"
           },
           timestamp: new Date().toISOString()
         })
@@ -92,11 +102,11 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         console.log("stopping LLM due to error")
         data.push({
           id: randomBytes(4).toString(),
-          parentId: "randome abhi ke liye",
-          type: 'message',
-          role: 'assitant',
+          parentId: "randome abhi ke liye", // #TODO: implement tree and store prev node id here.
+          type: "message",
+          role: "assistant",
           message: {
-            input: 'asdfasdf'
+            content: "Error occurred"
           },
           timestamp: new Date().toISOString()
         })
@@ -139,8 +149,8 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
                 id: randomBytes(4).toString(),
                 parentId: "asdf", // #TODO: implement tree and store prev node id here.
                 timestamp: new Date().toISOString(),
-                type: 'message',
-                role: 'toolCall',
+                type: "message",
+                role: "toolCall",
                 message:{
                   toolName: call.name,
                   content: {
@@ -156,13 +166,13 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
                 id: randomBytes(4).toString(),
                 parentId: "asdf", // #TODO: implement tree and store prev node id here.
                 timestamp: new Date().toISOString(),
-                type: 'message',
-                role: 'toolCall',
+                type: "message",
+                role: "toolCall",
                 message:{
                   toolName: call.name,
                   content: {
                     text: ToolResult,
-                    isError: false,
+                    isError: true,
                     timestamp: new Date().getTime()
                   }
                 }
@@ -201,10 +211,36 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         // 'completed' — push assistant message to context
         hasMoreToolCalls = false
         finalOutput = response.output
+        data.push({
+        id: randomBytes(4).toString(),
+        parentId: "random id for now",
+        type: 'message',
+        role: 'assistant',
+        message: {
+          content: response.output
+        },
+        timestamp: new Date().toISOString()
+      })
       }
       // hasMoreToolCalls = false; // temp cond
     }
-
+    const newTurns: Message[] = data
+      .filter(
+        (e): e is typeof e & {
+          role: "user" | "assistant";
+          message: { content: string };
+        } =>
+          e.type === "message" &&
+          (e.role === "user" || e.role === "assistant") &&
+          typeof e.message.content === "string"
+      )
+      .map(e => ({
+        role: e.role,
+        content: e.message.content,
+      }));
+    console.log(newTurns, " is the payload to send in add memory")
+    const addMemoryRes = addMemory(newTurns)
+    console.log(addMemoryRes, " is the memory res")
   //   break;
 
   //   // outer loop: wait for next user input / steering / followup

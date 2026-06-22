@@ -1,52 +1,39 @@
-import 'dotenv/config'
-import { Memory } from "mem0ai/oss";
+import { spawnSync } from "child_process";
+import path from "path";
+import {Message}  from '../models/model'
+const MEMORY_SERVICE = path.resolve(
+  import.meta.dirname,
+  "memory-service.ts"
+);
 
-const memory = new Memory({
-  llm: {
-    provider: "deepseek",
-    config: {
-      apiKey: process.env.DEEPSEEK_API_KEY,
-      model: "deepseek-v4-flash",
-      baseURL: "https://api.deepseek.com"
-    
+
+function callMemoryService(command: string, payload: string): unknown {
+  const result = spawnSync(
+    "node",
+    ["--experimental-strip-types", MEMORY_SERVICE, command, payload],
+    {
+      encoding: "utf-8",
+      env: {...process.env},
+      timeout: 30000
     }
-  },
-  embedder: {
-    provider: "ollama",
-    config: { model: "nomic-embed-text:latest", url: "http://localhost:11434" }
-  },
-  vectorStore: {
-    provider: "pgvector",
-    config: {
-      dbname: "vector_store",
-      collectionName: "memories",
-      embeddingModelDims: 768,
-      user: "postgres",
-      password: "postgres",
-      host: "127.0.0.1",
-      port: 5432
-    }
-  },
-  // historyDbPath: "memory.db"
-});
+  );
 
+  if (result.error) throw new Error(`Memory service failed to spawn: ${result.error.message}`);
+  if (result.status !== 0) throw new Error(`Memory service exited with ${result.status}: ${result.stderr}`);
 
-async function main(){
-    const addResult = await memory.add(
-        [
-            { role: "user", content: "I'm building a CLI agent harness called pi-cli using TypeScript and Bun." },
-            { role: "assistant", content: "Got it, noted that you're using TypeScript and Bun for pi-cli." }
-        ],
-        {userId: "Ashutosh"}
-    )
-      console.log("Add result:", JSON.stringify(addResult, null, 2));
-      console.log("\nSearching memory...");
-  const searchResult = await memory.search("what is pi-cli built with?", {filters: {user_id: "Ashutosh"}});
-  console.log("Search result:", JSON.stringify(searchResult, null, 2));
-
+  return JSON.parse(result.stdout);
 }
 
-main().catch((err) => {
-  console.error("FAILED:", err);
-  process.exit(1);
-});
+export function addMemory(messages: Message[]): void {
+  // filter to only user/assistant turns, strip anything else
+  const filtered = messages.filter(m => m.role === "user" || m.role === "assistant");
+  if (filtered.length === 0) return;
+  callMemoryService("add", JSON.stringify(filtered));
+}
+
+export function searchMemory(query: string): string {
+  const response = callMemoryService("search", query) as { ok: boolean; results: Array<{ memory: string }> };
+  if (!response.ok) return "";
+  // flatten relevant memories into a single string for system prompt injection
+  return response.results.map(r => r.memory).join("\n");
+}

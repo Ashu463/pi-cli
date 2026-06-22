@@ -62,3 +62,8 @@ export interface BashTool {
 export interface AgentContext{
 
 }
+
+export type Message = { 
+    role: "user" | "assistant"; 
+    content: string 
+};
