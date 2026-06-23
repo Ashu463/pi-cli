@@ -2,7 +2,8 @@ import { Tool, ToolCall } from "./model"
 
 
 export interface AgentResponse{
-    message: string
+    message: string,
+    toolResult: string
     data: SessionData[]
 }
 export interface SessionDatabase{

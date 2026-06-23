@@ -55,10 +55,10 @@ export const prompt = new Command("prompt")
         console.log("calling agent")
         const response : Promise<AgentResponse | undefined> = AgentCall(req)
         response.then((res: any) => {
-        console.log(res, " is the final llm response received")
-        const sessionData = res.data
+            console.log(res, " is the llm response")
+            const sessionData = res.data
 
-        console.log(`\n  Q: ${prompt}\n  A: ${res.message}\n`)
+            console.log(`\n  Q: ${prompt}\n  A: ${res.message}\n ToolResults: ${res.toolResult}`)
 
         // session write
         try {
@@ -67,7 +67,6 @@ export const prompt = new Command("prompt")
             const directoryPath = path.join(sessionPath, relativeCwd)
 
             const filePath = path.join(directoryPath, `${sessionName}.json`)
-            console.log(relativeCwd, " and file path becomes, ", directoryPath)
             if (fs.existsSync(filePath)) {
                 const existing = JSON.parse(fs.readFileSync(filePath, "utf-8"))
                 const arr = Array.isArray(existing) ? existing : [existing]

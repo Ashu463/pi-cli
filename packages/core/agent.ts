@@ -57,6 +57,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
   })
   const relevantMemories = searchMemory(req.message);
   console.log(relevantMemories, " is the fetched memory")
+  
   // while (true) {
     let hasMoreToolCalls = true
 
@@ -66,9 +67,9 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
       }
       else firstTurn = false;
 
-      console.log(req.message, " is the message with which LLM called")
-      const response: LLMResponse = await streamLLM(req)
+      const response: LLMResponse = await streamLLM(req, relevantMemories)
       console.log(response, " is the reponse from LLM inside runLooop")
+      
       data.push({
         id: randomBytes(4).toString(),
         parentId: "random id for now",
@@ -95,6 +96,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         })
         return {
           message: "LLM aborted",
+          toolResult: ToolResult,
           data: data
         }
       }
@@ -112,6 +114,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         })
         return {
           message: "Error occurred",
+          toolResult: ToolResult,
           data: data
         }
       }
@@ -221,19 +224,20 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         },
         timestamp: new Date().toISOString()
       })
+
       }
       // hasMoreToolCalls = false; // temp cond
     }
     const newTurns: Message[] = data
-  .filter((e): e is message => e.type === "message")
-  .filter(
-    (e): e is message & { role: "user" | "assistant" } =>
-      e.role === "user" || e.role === "assistant"
-  )
-  .map((e) => ({
-    role: e.role as "user" | "assistant",
-    content: e.message.content as string,
-  }));
+      .filter((e): e is message => e.type === "message")
+      .filter(
+        (e): e is message & { role: "user" | "assistant" } =>
+          e.role === "user" || e.role === "assistant"
+      )
+      .map((e) => ({
+        role: e.role as "user" | "assistant",
+        content: e.message.content as string,
+    }));
     console.log(newTurns, " is the payload to send in add memory")
     const addMemoryRes = addMemory(newTurns)
     console.log(addMemoryRes, " is the memory res")
@@ -242,17 +246,22 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
   //   // outer loop: wait for next user input / steering / followup
   // }
   return {
-    message: ToolResult,
+    message: finalOutput,
+    toolResult: ToolResult,
     data: data
   }
 }
 const availableTools: ToolName[] = ["bash", "edit", "read", "write"]
-async function streamLLM(req: AgentRequest): Promise<LLMResponse> {
+async function streamLLM(req: AgentRequest, relevantMemories: string): Promise<LLMResponse> {
   // TODO: apply context if configured
   // convert to LLM compatible msgs. ~ not needed in our case. 
   // build LLM context, system, user prompt and tools
+  let updatedSysPrompt = systemPrompt;
+  if(relevantMemories !== ""){
+    updatedSysPrompt += `## Relevant context from memory: ${relevantMemories}`
+  }
   const llmContext: LLMContext = {
-    systemPrompt: systemPrompt,
+    systemPrompt: updatedSysPrompt,
     content: req.message,
     tools: availableTools
   }

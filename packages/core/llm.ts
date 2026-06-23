@@ -30,7 +30,6 @@ export async function LLMCall(req: LLMRequest): Promise<LLMResponse> {
     console.log(req, " is the llm req ")
 
   if (provider === "openai") {
-    console.log("calling openai")
     const res = await OpenAICall(apiKey, llmContext, model, availableTools)
     return normalizeOpenAIResponse(res)
   }
@@ -42,8 +41,6 @@ export async function LLMCall(req: LLMRequest): Promise<LLMResponse> {
   // }
 
   if (provider === "deepseek") {
-    console.log("calling deepseek")
-    
     const res = await DeepseekCall(apiKey, llmContext, model, availableTools)
     return normalizeOpenAIResponse(res) // DeepSeek is OpenAI-compatible
   }
