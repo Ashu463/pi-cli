@@ -1,20 +1,25 @@
 import { Command } from "commander";
 import fs from 'fs'
-import path from 'path'
 import { AgentCall } from "@repo/core";
 import { AgentRequest } from "../../../../packages/core/models/model";
 import { sessionPath, settingsFile } from "./config";
 import { randomUUID } from "crypto";
 import process from 'process'
 import { AgentResponse } from "../../../../packages/core/models/clientTypes";
-
+import path from 'path'
+import os from 'os'
 if(!fs.existsSync(sessionPath)){
     fs.mkdirSync(sessionPath, {recursive: true})
+}
+const cwd = process.cwd()
+
+if(!fs.existsSync(cwd)){
+    fs.mkdirSync(cwd, {recursive: true})
 }
 export const prompt = new Command("prompt")
     .description('new prompt')
     .option('--p <prompt>', "prompt string")
-    .option('--sessionName <sessionName>', "give the session ID to use while continuing this prompt")
+    .option('--sessionName <sessionName>', "give the session name to use while continuing this prompt")
     .action((options) =>{
         console.log("prompts command hit", options)
         const prompt = options.p
@@ -23,8 +28,10 @@ export const prompt = new Command("prompt")
         const obj = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'))
 
         const currTime = new Date().toISOString()
-        const cwd = process.cwd()
         // LLMCall(prompt, defaultSettingsObj)
+        if (!sessionName) {
+            sessionName = new Date().toISOString().replace(/[:.]/g, "-") + "_" + randomUUID() + ".jsonl"
+        }
         let req: AgentRequest
         if(!sessionName){
             req = {
@@ -45,47 +52,40 @@ export const prompt = new Command("prompt")
                 cwd: process.cwd()
             }
         }
+        console.log("calling agent")
         const response : Promise<AgentResponse | undefined> = AgentCall(req)
-        response.then((res: any)=>{
-            let sessionData;
-            console.log(res, " is the final llm response recieved")
-            sessionData = res.data
-            console.log(`
-            Q: ${prompt}
-            A: ${res.message}
-            `)
-            const sessionFilePath = path.basename(cwd) + "-" + Date.now() + ".json"
-            
-            if(!sessionName){
-                console.log("file doesn't exists and creating new file and saving in, ", sessionFilePath)
-                fs.writeFileSync(sessionFilePath, JSON.stringify(sessionData, null, 2))
-            }
-            else{
-                let obj = []
-                const file = sessionPath + sessionName;
-                if(fs.existsSync(file)){
-                console.log("going to read content from sessionPath")
+        response.then((res: any) => {
+        console.log(res, " is the final llm response received")
+        const sessionData = res.data
 
-                    const data = (fs.readFileSync(sessionPath+sessionName, 'utf-8'))
-    
-                    obj = JSON.parse(data)
-                    if (!Array.isArray(obj)) {
-                        obj = [obj]; // wrap existing object in an array
-                    }
-                    obj.push(sessionData)
-                    fs.writeFileSync(file, JSON.stringify(obj, null, 2))
-                }
-                // over write the content of existing file. 
-    
+        console.log(`\n  Q: ${prompt}\n  A: ${res.message}\n`)
+
+        // session write
+        try {
+            const relativeCwd = path.relative(os.homedir(), cwd)
+
+            const directoryPath = path.join(sessionPath, relativeCwd)
+
+            const filePath = path.join(directoryPath, `${sessionName}.json`)
+            console.log(relativeCwd, " and file path becomes, ", directoryPath)
+            if (fs.existsSync(filePath)) {
+                const existing = JSON.parse(fs.readFileSync(filePath, "utf-8"))
+                const arr = Array.isArray(existing) ? existing : [existing]
+                arr.push(sessionData)
+                fs.writeFileSync(filePath, JSON.stringify(arr, null, 2))
+            } else {
+                fs.mkdirSync(directoryPath, {recursive: true})
+                fs.writeFileSync(filePath, JSON.stringify(sessionData, null, 2))
             }
+            console.log(`[session] saved to ${directoryPath}`)
+        } catch (e) {
+            console.error(`[session] failed to save:`, e)
+        }
+
         })
-        .catch((e) =>{
-            throw new Error(`${e} Error occurred on saving side`)
+        .catch((e) => {
+        console.error(`[agent] AgentCall failed:`, e)
         })
         
         // write into the session file by creating a new one with given timestamp
-
-
-        
-        
     })

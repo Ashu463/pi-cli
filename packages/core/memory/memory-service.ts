@@ -1,7 +1,6 @@
 import 'dotenv/config'
 import { Memory } from "mem0ai/oss";
 import os from 'os'
-console.log(process.env.DEEPSEEK_API_KEY, " is the api key")
 const memory = new Memory({
   llm: {
     provider: "deepseek",
@@ -21,15 +20,14 @@ const memory = new Memory({
       dbname: "vector_store",
       collectionName: "memories",
       embeddingModelDims: 768,
-      user: "postgres",
-      password: "postgres",
+      user: "test",
+      password: "123",
       host: "127.0.0.1",
       port: 5432
     }
   },
   historyDbPath: `${os.homedir()}/.pi-cli/memory-history.db`
 });
-
 const userId = os.userInfo().username;
 const [,, command, payload] = process.argv;
 
@@ -46,13 +44,12 @@ async function main(){
     process.exit(1);
   }
 }
-
-main().catch((err) => {
-  console.error("FAILED:", err);
-  process.exit(1);
-});
-
-main().catch((err) => {
-  console.log(JSON.stringify({ ok: false, error: err.message }));
-  process.exit(1);
-});
+main()
+  .then(() => {
+    console.error("done");
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

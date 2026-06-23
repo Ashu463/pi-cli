@@ -41,7 +41,7 @@ export interface assistant{
 }
 export interface toolResult{
     toolName: string
-    content: ToolContent
+    content:  ToolContent
 }
 interface ToolContent{
     text: string

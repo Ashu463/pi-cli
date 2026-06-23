@@ -225,19 +225,15 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
       // hasMoreToolCalls = false; // temp cond
     }
     const newTurns: Message[] = data
-      .filter(
-        (e): e is typeof e & {
-          role: "user" | "assistant";
-          message: { content: string };
-        } =>
-          e.type === "message" &&
-          (e.role === "user" || e.role === "assistant") &&
-          typeof e.message.content === "string"
-      )
-      .map(e => ({
-        role: e.role,
-        content: e.message.content,
-      }));
+  .filter((e): e is message => e.type === "message")
+  .filter(
+    (e): e is message & { role: "user" | "assistant" } =>
+      e.role === "user" || e.role === "assistant"
+  )
+  .map((e) => ({
+    role: e.role as "user" | "assistant",
+    content: e.message.content as string,
+  }));
     console.log(newTurns, " is the payload to send in add memory")
     const addMemoryRes = addMemory(newTurns)
     console.log(addMemoryRes, " is the memory res")
