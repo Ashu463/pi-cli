@@ -76,6 +76,7 @@ export async function OpenAICall(key: string, llmContext: LLMContext, model: str
             tools:[availableTools, {type: "tool_search"}],
             parallel_tool_calls: false
         })
+        
         console.log("LLM generated, ", response)
         console.log("Tools calls demanded are", response.tools)
         return response

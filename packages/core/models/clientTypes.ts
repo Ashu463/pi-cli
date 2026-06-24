@@ -1,4 +1,4 @@
-import { Tool, ToolCall } from "./model"
+import { ToolCall } from "./model"
 
 
 export interface AgentResponse{

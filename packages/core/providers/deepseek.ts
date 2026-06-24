@@ -74,8 +74,8 @@ export async function DeepseekCall(key: string, llmMessage: LLMContext, model: s
             model: "deepseek-chat",
             messages: [
                 {
-                    role: 'user',
-                    content: llmMessage.content + llmMessage.systemPrompt
+                  role: 'user',
+                  content: llmMessage.content + llmMessage.systemPrompt
                 }
             ],
             tools: deepseekTools,
