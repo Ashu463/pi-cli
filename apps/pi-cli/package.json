@@ -1,7 +1,7 @@
 {
-  "name": "pi-cli",
+  "name": "@ashuk971/nive",
   "type": "module",
-  "private": true,
+  "version": "0.1.0",
   "devDependencies": {
     "@types/bun": "latest"
   },
@@ -13,12 +13,13 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
-    "@repo/core": "*",
+    "@repo/core": "workspace:*",
     "axios": "^1.17.0",
     "commander": "^15.0.0"
   },
   "main": "dist/index.js",
   "bin": {
-    "pi-cli": "./src/index.ts"
-  }
+    "nive": "./dist/index.js"
+  },
+  "files": ["dist"]
 }

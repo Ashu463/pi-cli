@@ -1,6 +1,12 @@
 {
-  "name": "pi",
-  "private": true,
+  "name": "nive",
+  "version": "1.0.0",
+  "bin": {
+    "nive": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "module": "./dist/index.js",
+  "type": "module",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
