@@ -15,6 +15,7 @@
 - MCP
 - RAG pipeline
 - Agents orchestration
+- Evals
 
 ## Progress 
  
