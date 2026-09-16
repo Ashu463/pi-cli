@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { logger } from '../logger'
+import { BASH_TIMEOUT_MS, BASH_MAX_OUTPUT_LEN } from '../systemConfig'
 
 
 export async function ReadFile(input: Record<string, unknown>): Promise<string> {
@@ -52,9 +53,6 @@ export async function EditFile(input: Record<string, unknown>): Promise<string> 
     return `Error editing file: ${e.message}`
   }
 }
-
-const BASH_TIMEOUT_MS = 30_000
-const BASH_MAX_OUTPUT_LEN = 20_000
 
 export async function Bash(input: Record<string, unknown>): Promise<string> {
   const command = input.command as string

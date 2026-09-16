@@ -22,3 +22,12 @@ Guidelines
 - Use write only for new files or complete new writes
 - Be concise with your responses
 `
+
+export const compactSystemPrompt = `You are compacting an in-progress coding agent's conversation history so it fits in a smaller context window.
+Summarize the exchange below into a dense, factual record — not prose. Preserve, in order of importance:
+- The concrete state of the work: which files were read/written/edited, and what changed in them
+- Decisions made and why, especially ones that would be wasteful to redo (approaches tried and rejected, root causes found)
+- Errors encountered and whether they were resolved
+- Anything still pending or left unfinished
+
+Do not restate the original task, do not add commentary, do not soften or hedge. Output only the summary.`

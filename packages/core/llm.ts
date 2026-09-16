@@ -20,27 +20,27 @@ that means LLM call will have list of available tools, message,(might be user + 
 import { AnthropicCall } from "./providers/anthropic";
 import { OpenAICall } from "./providers/openai";
 import { DeepseekCall } from './providers/deepseek'
-import { LLMRequest, LLMResponse, ToolCall, ToolName } from "./models/model";
+import { LLMRequest, LLMResponse, ToolCall } from "./models/model";
 import { logger } from "./logger";
-
-const availableTools: ToolName[] = ["bash", "edit", "read", "write"]
 
 export async function LLMCall(req: LLMRequest): Promise<LLMResponse> {
   const { apiKey, provider, model, llmContext, onToken } = req
   logger.debug({ provider, model, llmContext }, "LLM request")
 
+  const tools = llmContext.tools
+
   if (provider === "openai") {
-    const res = await OpenAICall(apiKey, llmContext, model, availableTools, onToken)
+    const res = await OpenAICall(apiKey, llmContext, model, tools, onToken)
     return normalizeOpenAIResponse(res)
   }
 
   if (provider === "anthropic") {
-    const res = await AnthropicCall(apiKey, llmContext, model, availableTools, onToken)
+    const res = await AnthropicCall(apiKey, llmContext, model, tools, onToken)
     return normalizeAnthropicResponse(res)
   }
 
   if (provider === "deepseek") {
-    const res = await DeepseekCall(apiKey, llmContext, model, availableTools, onToken)
+    const res = await DeepseekCall(apiKey, llmContext, model, tools, onToken)
     return normalizeOpenAIResponse(res) // DeepSeek is OpenAI-compatible
   }
 

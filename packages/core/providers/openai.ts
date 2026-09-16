@@ -92,8 +92,7 @@ export async function OpenAICall(key: string, llmContext: LLMContext, model: str
             model: model,
             input,
             instructions: llmContext.systemPrompt,
-            tools:[availableTools, {type: "tool_search"}],
-            parallel_tool_calls: false,
+            ...(toolList.length > 0 ? { tools: [availableTools, { type: "tool_search" as const }], parallel_tool_calls: false } : {}),
             stream: true
         })
 

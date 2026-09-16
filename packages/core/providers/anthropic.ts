@@ -94,7 +94,7 @@ export async function AnthropicCall(key: string, llmContext: LLMContext, model: 
       max_tokens: 4096,
       system: llmContext.systemPrompt,
       messages: toAnthropicMessages(llmContext),
-      tools: anthropicTools,
+      ...(toolList.length > 0 ? { tools: anthropicTools } : {}),
       stream: true
     });
 

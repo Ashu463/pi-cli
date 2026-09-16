@@ -1,17 +1,21 @@
 import { randomBytes, randomUUID } from "crypto";
 import { LLMCall } from "./llm";
 import { AgentResponse, message, SessionData } from "./models/clientTypes";
-import { AgentRequest, ChatMessage, LLMContext, LLMRequest, LLMResponse, Message, ToolName } from "./models/model";
+import { AgentRequest, ChatMessage, LLMContext, LLMRequest, LLMResponse, Message } from "./models/model";
 import { bashTool, editFileTool, readFileTool, writeFileTool } from "./tools";
-import { systemPrompt } from "./config";
+import { systemPrompt, compactSystemPrompt } from "./config";
 import { addMemory, searchMemory } from "./memory";
 import { logger } from "./logger";
-
-const MAX_TURNS = 25
-const LLM_RETRY_ATTEMPTS = 3
-const LLM_RETRY_BACKOFF_MS = 500
-const DESTRUCTIVE_TOOLS = new Set(["write", "edit", "bash"])
-const MEMORY_ENABLED = process.env.MEMORY_ENABLED === "true"
+import {
+  MAX_TURNS,
+  LLM_RETRY_ATTEMPTS,
+  LLM_RETRY_BACKOFF_MS,
+  DESTRUCTIVE_TOOLS,
+  MEMORY_ENABLED,
+  AVAILABLE_TOOLS,
+  CHARS_PER_TOKEN_ESTIMATE,
+  COMPACT_TOKEN_THRESHOLD
+} from "./systemConfig";
 
 async function withRetry<T>(label: string, maxAttempts: number, fn: () => Promise<T>): Promise<T> {
   let lastError: unknown
@@ -28,6 +32,78 @@ async function withRetry<T>(label: string, maxAttempts: number, fn: () => Promis
     }
   }
   throw lastError
+}
+
+function estimateTokens(messages: ChatMessage[]): number {
+  const chars = messages.reduce((sum, m) => {
+    const toolCallChars = m.role === "assistant" && m.toolCalls ? JSON.stringify(m.toolCalls).length : 0
+    return sum + m.content.length + toolCallChars
+  }, 0)
+  return Math.ceil(chars / CHARS_PER_TOKEN_ESTIMATE)
+}
+
+function findSafeSplitIndex(messages: ChatMessage[], naiveMid: number): number {
+  for (let i = naiveMid; i < messages.length; i++) {
+    if (messages[i].role === "assistant") return i
+  }
+  for (let i = naiveMid - 1; i >= 0; i--) {
+    if (messages[i].role === "assistant") return i
+  }
+  return -1
+}
+
+function renderTranscript(messages: ChatMessage[]): string {
+  return messages.map(m => {
+    if (m.role === "user") return `User: ${m.content}`
+    if (m.role === "assistant") {
+      const toolPart = m.toolCalls?.length ? ` [called: ${m.toolCalls.map(tc => tc.name).join(", ")}]` : ""
+      return `Assistant: ${m.content}${toolPart}`
+    }
+    return `Tool result (${m.name}): ${m.content}`
+  }).join("\n\n")
+}
+
+async function summarizeMessages(messages: ChatMessage[], req: AgentRequest): Promise<string> {
+  const llmContext: LLMContext = {
+    systemPrompt: compactSystemPrompt,
+    messages: [{ role: "user", content: renderTranscript(messages) }],
+    tools: []
+  }
+  const llmReq: LLMRequest = { provider: req.provider, model: req.model, apiKey: req.apiKey, llmContext }
+  const response = await withRetry("context compaction", LLM_RETRY_ATTEMPTS, () => LLMCall(llmReq))
+  return response.output || "(compaction produced no summary)"
+}
+
+async function compactContext(messages: ChatMessage[], req: AgentRequest): Promise<ChatMessage[]> {
+  const tokens = estimateTokens(messages)
+  if (tokens <= COMPACT_TOKEN_THRESHOLD) return messages
+
+  const [head, ...rest] = messages
+  if (rest.length < 4) return messages // too small to safely split, let it ride
+
+  const splitIndex = findSafeSplitIndex(rest, Math.floor(rest.length / 2))
+  if (splitIndex === -1) return messages // no safe boundary found, skip this round
+
+  logger.info({ tokens, threshold: COMPACT_TOKEN_THRESHOLD }, "context exceeds threshold, compacting older half")
+
+  const olderHalf = rest.slice(0, splitIndex)
+  const recentHalf = rest.slice(splitIndex)
+  const summary = await summarizeMessages(olderHalf, req)
+  const compacted: ChatMessage[] = [
+    head,
+    { role: "user", content: `[Summary of earlier progress in this task]\n${summary}` },
+    ...recentHalf
+  ]
+
+  const newTokens = estimateTokens(compacted)
+  if (newTokens <= COMPACT_TOKEN_THRESHOLD) {
+    logger.info({ before: tokens, after: newTokens }, "compaction brought context under threshold")
+    return compacted
+  }
+
+  logger.warn({ tokens: newTokens }, "compacting the older half wasn't enough, summarizing full context")
+  const fullSummary = await summarizeMessages(rest, req)
+  return [head, { role: "user", content: `[Summary of earlier progress in this task]\n${fullSummary}` }]
 }
 /*
 - fetch data in form of LLMRequest
@@ -55,7 +131,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
 
   let data: SessionData[] = []
   // messages sent to the LLM every call — this is where conversation history actually lives.
-  const messages: ChatMessage[] = []
+  let messages: ChatMessage[] = []
   let lastNodeId: string = "root"
   //
   // first create session
@@ -273,6 +349,14 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         finalOutput = response.output
       }
       // hasMoreToolCalls = false; // temp cond
+
+      if (hasMoreToolCalls) {
+        try {
+          messages = await compactContext(messages, req)
+        } catch (e) {
+          logger.warn({ err: e }, "context compaction failed, continuing with uncompacted messages")
+        }
+      }
     }
     const newTurns: Message[] = data
       .filter((e): e is message => e.type === "message")
@@ -302,7 +386,6 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
     data: data
   }
 }
-const availableTools: ToolName[] = ["bash", "edit", "read", "write"]
 async function streamLLM(req: AgentRequest, messages: ChatMessage[], relevantMemories: string): Promise<LLMResponse> {
   // TODO: apply context if configured
   // convert to LLM compatible msgs. ~ not needed in our case.
@@ -314,7 +397,7 @@ async function streamLLM(req: AgentRequest, messages: ChatMessage[], relevantMem
   const llmContext: LLMContext = {
     systemPrompt: updatedSysPrompt,
     messages,
-    tools: availableTools
+    tools: AVAILABLE_TOOLS
   }
   const llmReq: LLMRequest = { ...req, llmContext }
 

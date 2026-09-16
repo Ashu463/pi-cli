@@ -94,8 +94,7 @@ export async function DeepseekCall(key: string, llmContext: LLMContext, model: s
         const stream = await client.chat.completions.create({
             model: "deepseek-chat",
             messages,
-            tools: deepseekTools,
-            tool_choice: "auto",
+            ...(toolList.length > 0 ? { tools: deepseekTools, tool_choice: "auto" as const } : {}),
             stream: true
         })
 

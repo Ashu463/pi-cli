@@ -2,6 +2,7 @@
 export * from "./agent";
 export * from "./llm";
 export * from "./logger";
+export * from "./systemConfig";
 
 export * from "./providers/openai";
 export * from "./providers/anthropic";

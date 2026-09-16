@@ -1,5 +1,61 @@
 # AI Harness Project — Study & Build Plan
 
+
+---
+
+## Post-MVP: Correctness Fixes (2026-09-16)
+Found while reviewing the published MVP against real agent-loop mechanics. All fixed:
+- [x] `ReadFile`/`EditFile` called `JSON.parse` on raw file content — broke on any non-JSON file
+- [x] Agent loop had no real `messages[]` history — was mutating `req.message` with string concat each turn instead of threading conversation state
+- [x] OpenAI/Deepseek providers now send full message history (including tool results) instead of one flattened string
+- [x] Session tree `id`/`parentId` were hardcoded placeholder strings (`"random id for now"` etc.) — now a real chain
+- [x] Tool calls executed sequentially in a loop — now `Promise.all` (parallel, matches real Pi/Claude Code loop)
+- [x] `bash` tool had no timeout — a hung command hung the whole agent forever; added 30s timeout + output truncation
+- [x] `packages/core/tsconfig.json` extended a root `tsconfig.json` that didn't exist — check-types was silently broken; gave it its own base config
+- [x] `apps/pi-cli/tsconfig.json` had a dead `express` path mapping and an invalid `ignoreDeprecations` value blocking typecheck — removed
+- [x] Replaced raw `console.log`/`console.warn`/`console.error` debug spam across `packages/core` and `apps/pi-cli` with a real pino logger (`packages/core/logger.ts`); routed to stderr (not pino's stdout default) since `memory-service.ts` relies on a clean stdout for its `JSON.parse`d subprocess protocol; kept genuine user-facing CLI output (Q/A printout, confirm prompts, session-saved messages) as plain output, not logging
+- [x] `memory-service.ts` was failing with `ERR_MODULE_NOT_FOUND: dotenv` — root cause was `bunx tsx` (real Node.js) not resolving bun's workspace `node_modules/.bun` store; fixed by ensuring the package link exists, not by switching runtimes (tried `bun run` instead of `bunx tsx` first — reverted, since `mem0ai`'s history DB uses `better-sqlite3`, a native addon bun can't `dlopen`, so Node is required here)
+- [x] Memory unplugged by default (`MEMORY_ENABLED` env var, off unless set) — it spawned a subprocess per turn and needed `DEEPSEEK_API_KEY` + pgvector + ollama configured to even work; not worth the latency or failure surface for short-running tasks. Calls are also wrapped in try/catch now so a future re-enable with a bad config degrades to "no memory" instead of killing the whole agent run (this is literally what just happened — a misconfigured memory service took down an otherwise-working prompt)
+
+## Roadmap — closing the gap with real Pi / Claude Code
+Ordered roughly by leverage. Goal: get this to a state where a SWE-bench Lite run is a meaningful signal, not a foregone 0%.
+
+### Near-term (unblocks everything else)
+- [x] Anthropic provider wired up properly — `providers/anthropic.ts` rewritten to match the same `(key, llmContext, model, toolList)` shape as openai/deepseek, real message conversion (tool results collapsed into `tool_result` blocks on a user message, since Anthropic forbids two consecutive same-role messages), `normalizeAnthropicResponse` fixed to actually extract `tool_use` blocks into `ToolCall[]` (was hardcoded to `[]`), uncommented in `llm.ts`. Not live-tested (no Anthropic key configured) but typechecks clean and follows the same pattern verified working for deepseek.
+- [x] Max turns safety valve — `MAX_TURNS = 25` in `agent.ts`, loop returns a structured stopped-response instead of looping forever
+- [x] Auto-retry with backoff on LLM call failure — `withRetry()` in `agent.ts`, 3 attempts, linear backoff, wraps `LLMCall`; real last error now surfaces instead of a swallowed generic message
+- [x] Real tool-name consistency pass — `packages/core/tools/index.ts` `Tool.name` fields (`read_file`/`write_file`/`edit_file`) renamed to match the actual dispatch names (`read`/`write`/`edit`) used by agent.ts and the provider schemas
+- [x] Fixed a real, previously-undetected bug found while testing streaming: deepseek/openai tool schemas told the LLM the write/edit path param was called `filePath` and edit's content param was `content`, but `tools.ts`'s actual `ReadFile`/`WriteFile`/`EditFile` read `input.path`/`input.old_string`/`input.new_string` — meaning `write`/`edit` silently got `path: undefined` through both providers and never actually worked. Fixed both schemas to match the real tool signatures; confirmed with a live write-to-file test.
+- [x] Deleted genuinely dead code found during this pass: `packages/core/types.ts` (whole file, zero live imports, superseded by `models/model.ts`), unused `ReadTool`/`WriteTool`/`EditTool`/`BashTool`/`AgentContext` interfaces in `model.ts`, unused `allTools` export in `tools/index.ts`, unused `NODE_BIN` in `memory/index.ts`. Left `config.ts`'s commented-out `transformContext` idea alone (real unbuilt-feature scaffolding, not noise).
+- [x] Context compaction — implemented in `agent.ts`, design adapted from a `ManageContext()` pattern in a separate project (github.com/Ashu463/lovable, `packages/agents/agent/agent.ts`), stripped of that repo's business-specific plumbing (R2 sync, BAML, Langfuse tracing, Postgres session state):
+  - `estimateTokens()` — char-count heuristic (~4 chars/token), not tiktoken; tiktoken's encodings are OpenAI-specific and would be misleading given this project talks to deepseek/anthropic too, which use different tokenizers
+  - `COMPACT_TOKEN_THRESHOLD = 50_000` (default), overridable via `COMPACT_TOKEN_THRESHOLD_OVERRIDE` env var since the "right" threshold really depends on the model's actual context window, which isn't tracked anywhere yet
+  - Called at the end of every turn in the loop, only when another turn is about to happen. `messages[0]` (the original task instruction) is never touched. Everything after it gets split at a *safe* boundary — `findSafeSplitIndex` walks to the nearest point right before an `assistant` message, never mid-way through an assistant/tool-result exchange, since slicing there produces an invalid message sequence (Anthropic rejects it outright; every provider gets confused by it)
+  - Only the older half gets summarized (dedicated LLM call, `compactSystemPrompt` in `config.ts`, asks for a dense factual record not prose); recent half stays verbatim. Falls back to summarizing everything if the older-half compaction alone wasn't enough
+  - Found and fixed a real bug while testing this: the summarization call was getting the full read/write/edit/bash tool schema attached anyway, regardless of asking for no tools — `llm.ts` was silently ignoring `llmContext.tools` and always substituting its own hardcoded list before calling any provider, and each provider (`openai.ts`/`deepseek.ts`/`anthropic.ts`) unconditionally attached its own tool schema too. The model would call tools (sometimes on hallucinated paths) instead of summarizing, and `summarizeMessages` silently fell back to a placeholder. Fixed `llm.ts` to forward the caller's actual `llmContext.tools`, and all three providers to omit the tools param from their API call entirely when that list is empty. Verified live: forced compaction with a tiny threshold override, confirmed real summary text comes back, confirmed normal tool-calling (write/edit) still works unaffected afterward.
+  - Known gap, not fixed: compaction only ever compacts `messages[]` on the *next* provider call — if a single turn's own content (e.g. one huge tool output) already exceeds the threshold, that's only caught after the fact.
+
+### Steering / long-running tasks (your idea)
+- [ ] followUp / steer message queue — let a user inject a new instruction mid-run without killing the loop, matches the "steer → injected at top of next turn" invariant already documented above
+- [ ] Abort/interrupt handling that actually cancels an in-flight LLM stream, not just a flag checked after the fact
+- [ ] Background/async task mode — kick off a long task, detach, reattach later (this is what makes "long running task" meaningfully different from a single CLI call)
+
+### TUI (your idea)
+- [x] Streaming token output to terminal — `onToken` callback threaded through `AgentRequest` → `LLMRequest` → each provider's Call function; deepseek and openai use real SSE delta accumulation (`chat.completions.create({stream:true})` / `responses.create({stream:true})`), anthropic uses the raw Messages stream events (`content_block_delta`, collapsing `text_delta`/`input_json_delta` by block index); all three still return the same shape the non-streaming normalizers already expect, so `normalizeOpenAIResponse`/`normalizeAnthropicResponse` didn't need to change. `apps/pi-cli/prompt.ts` writes deltas straight to stdout live. Verified end-to-end with the real deepseek key — text streams, tool calls still work, confirm gate still fires correctly mid-stream.
+- [ ] Live view of tool calls as they execute, not just post-hoc debug logs
+- [ ] Session/branch picker — the JSONL tree exists conceptually (parentId chain) but nothing surfaces it to a user
+
+### Evals / benchmarking (your idea)
+- [ ] Write ~10-20 hand-picked small coding tasks first (read/edit/bash only, no SWE-bench harness yet) — cheap way to catch loop bugs before spending API credits on a real benchmark
+- [ ] Then SWE-bench Lite subset once the above is stable
+- [ ] Track basic eval metrics: task success rate, tool-call count per task, tokens per task, wall-clock time — these are the numbers worth putting on a resume, not just "ran SWE-bench"
+
+### Other high-value additions
+- [x] Guard rails / permission prompts before bash/write/edit — `AgentRequest.confirmTool` callback, gated in `agent.ts` for `write`/`edit`/`bash` (not `read`, non-destructive); `apps/pi-cli` wires it to a real `readline/promises` y/N terminal prompt in `prompt.ts`; decline returns a tool-result telling the LLM the user said no, doesn't throw
+- [ ] Subagent spawning — one agent call delegating a sub-task to another agent call, already scoped in the original planner.md "Future Scope"
+- [ ] Re-enable memory for long-running/multi-session tasks — needs a real `.env` (`DEEPSEEK_API_KEY`) plus pgvector + ollama running, then flip `MEMORY_ENABLED=true`; worth revisiting once steering/background task mode exists, since that's when cross-session context actually starts to matter
+
+
 ## Context
 Building a minimal AI agent harness from scratch, using Pi (github.com/earendil-works/pi) as the reference architecture. Goal: deep understanding of agentic loop mechanics, not a polished product. Backend-strong, AI-new.
 
@@ -164,50 +220,3 @@ return newMessages
 - Set via env var: ANTHROPIC_API_KEY or GEMINI_API_KEY
 - Do not use expensive models (Opus, Sonnet) for loop testing — Haiku is sufficient
 
----
-
-## Post-MVP: Correctness Fixes (2026-09-16)
-Found while reviewing the published MVP against real agent-loop mechanics. All fixed:
-- [x] `ReadFile`/`EditFile` called `JSON.parse` on raw file content — broke on any non-JSON file
-- [x] Agent loop had no real `messages[]` history — was mutating `req.message` with string concat each turn instead of threading conversation state
-- [x] OpenAI/Deepseek providers now send full message history (including tool results) instead of one flattened string
-- [x] Session tree `id`/`parentId` were hardcoded placeholder strings (`"random id for now"` etc.) — now a real chain
-- [x] Tool calls executed sequentially in a loop — now `Promise.all` (parallel, matches real Pi/Claude Code loop)
-- [x] `bash` tool had no timeout — a hung command hung the whole agent forever; added 30s timeout + output truncation
-- [x] `packages/core/tsconfig.json` extended a root `tsconfig.json` that didn't exist — check-types was silently broken; gave it its own base config
-- [x] `apps/pi-cli/tsconfig.json` had a dead `express` path mapping and an invalid `ignoreDeprecations` value blocking typecheck — removed
-- [x] Replaced raw `console.log`/`console.warn`/`console.error` debug spam across `packages/core` and `apps/pi-cli` with a real pino logger (`packages/core/logger.ts`); routed to stderr (not pino's stdout default) since `memory-service.ts` relies on a clean stdout for its `JSON.parse`d subprocess protocol; kept genuine user-facing CLI output (Q/A printout, confirm prompts, session-saved messages) as plain output, not logging
-- [x] `memory-service.ts` was failing with `ERR_MODULE_NOT_FOUND: dotenv` — root cause was `bunx tsx` (real Node.js) not resolving bun's workspace `node_modules/.bun` store; fixed by ensuring the package link exists, not by switching runtimes (tried `bun run` instead of `bunx tsx` first — reverted, since `mem0ai`'s history DB uses `better-sqlite3`, a native addon bun can't `dlopen`, so Node is required here)
-- [x] Memory unplugged by default (`MEMORY_ENABLED` env var, off unless set) — it spawned a subprocess per turn and needed `DEEPSEEK_API_KEY` + pgvector + ollama configured to even work; not worth the latency or failure surface for short-running tasks. Calls are also wrapped in try/catch now so a future re-enable with a bad config degrades to "no memory" instead of killing the whole agent run (this is literally what just happened — a misconfigured memory service took down an otherwise-working prompt)
-
-## Roadmap — closing the gap with real Pi / Claude Code
-Ordered roughly by leverage. Goal: get this to a state where a SWE-bench Lite run is a meaningful signal, not a foregone 0%.
-
-### Near-term (unblocks everything else)
-- [x] Anthropic provider wired up properly — `providers/anthropic.ts` rewritten to match the same `(key, llmContext, model, toolList)` shape as openai/deepseek, real message conversion (tool results collapsed into `tool_result` blocks on a user message, since Anthropic forbids two consecutive same-role messages), `normalizeAnthropicResponse` fixed to actually extract `tool_use` blocks into `ToolCall[]` (was hardcoded to `[]`), uncommented in `llm.ts`. Not live-tested (no Anthropic key configured) but typechecks clean and follows the same pattern verified working for deepseek.
-- [x] Max turns safety valve — `MAX_TURNS = 25` in `agent.ts`, loop returns a structured stopped-response instead of looping forever
-- [x] Auto-retry with backoff on LLM call failure — `withRetry()` in `agent.ts`, 3 attempts, linear backoff, wraps `LLMCall`; real last error now surfaces instead of a swallowed generic message
-- [x] Real tool-name consistency pass — `packages/core/tools/index.ts` `Tool.name` fields (`read_file`/`write_file`/`edit_file`) renamed to match the actual dispatch names (`read`/`write`/`edit`) used by agent.ts and the provider schemas
-- [x] Fixed a real, previously-undetected bug found while testing streaming: deepseek/openai tool schemas told the LLM the write/edit path param was called `filePath` and edit's content param was `content`, but `tools.ts`'s actual `ReadFile`/`WriteFile`/`EditFile` read `input.path`/`input.old_string`/`input.new_string` — meaning `write`/`edit` silently got `path: undefined` through both providers and never actually worked. Fixed both schemas to match the real tool signatures; confirmed with a live write-to-file test.
-- [x] Deleted genuinely dead code found during this pass: `packages/core/types.ts` (whole file, zero live imports, superseded by `models/model.ts`), unused `ReadTool`/`WriteTool`/`EditTool`/`BashTool`/`AgentContext` interfaces in `model.ts`, unused `allTools` export in `tools/index.ts`, unused `NODE_BIN` in `memory/index.ts`. Left `config.ts`'s commented-out `transformContext` idea alone (real unbuilt-feature scaffolding, not noise).
-- [ ] Context compaction — right now `messages[]` grows unbounded; will blow context window on any real multi-step SWE task
-
-### Steering / long-running tasks (your idea)
-- [ ] followUp / steer message queue — let a user inject a new instruction mid-run without killing the loop, matches the "steer → injected at top of next turn" invariant already documented above
-- [ ] Abort/interrupt handling that actually cancels an in-flight LLM stream, not just a flag checked after the fact
-- [ ] Background/async task mode — kick off a long task, detach, reattach later (this is what makes "long running task" meaningfully different from a single CLI call)
-
-### TUI (your idea)
-- [x] Streaming token output to terminal — `onToken` callback threaded through `AgentRequest` → `LLMRequest` → each provider's Call function; deepseek and openai use real SSE delta accumulation (`chat.completions.create({stream:true})` / `responses.create({stream:true})`), anthropic uses the raw Messages stream events (`content_block_delta`, collapsing `text_delta`/`input_json_delta` by block index); all three still return the same shape the non-streaming normalizers already expect, so `normalizeOpenAIResponse`/`normalizeAnthropicResponse` didn't need to change. `apps/pi-cli/prompt.ts` writes deltas straight to stdout live. Verified end-to-end with the real deepseek key — text streams, tool calls still work, confirm gate still fires correctly mid-stream.
-- [ ] Live view of tool calls as they execute, not just post-hoc debug logs
-- [ ] Session/branch picker — the JSONL tree exists conceptually (parentId chain) but nothing surfaces it to a user
-
-### Evals / benchmarking (your idea)
-- [ ] Write ~10-20 hand-picked small coding tasks first (read/edit/bash only, no SWE-bench harness yet) — cheap way to catch loop bugs before spending API credits on a real benchmark
-- [ ] Then SWE-bench Lite subset once the above is stable
-- [ ] Track basic eval metrics: task success rate, tool-call count per task, tokens per task, wall-clock time — these are the numbers worth putting on a resume, not just "ran SWE-bench"
-
-### Other high-value additions
-- [x] Guard rails / permission prompts before bash/write/edit — `AgentRequest.confirmTool` callback, gated in `agent.ts` for `write`/`edit`/`bash` (not `read`, non-destructive); `apps/pi-cli` wires it to a real `readline/promises` y/N terminal prompt in `prompt.ts`; decline returns a tool-result telling the LLM the user said no, doesn't throw
-- [ ] Subagent spawning — one agent call delegating a sub-task to another agent call, already scoped in the original planner.md "Future Scope"
-- [ ] Re-enable memory for long-running/multi-session tasks — needs a real `.env` (`DEEPSEEK_API_KEY`) plus pgvector + ollama running, then flip `MEMORY_ENABLED=true`; worth revisiting once steering/background task mode exists, since that's when cross-session context actually starts to matter
