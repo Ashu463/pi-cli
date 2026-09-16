@@ -182,9 +182,9 @@ Ordered roughly by leverage. Goal: get this to a state where a SWE-bench Lite ru
 
 ### Near-term (unblocks everything else)
 - [ ] Anthropic provider is dead code (disconnected in `llm.ts`, different signature, no tool support) — either wire it up properly or delete it
-- [ ] Max turns safety valve — loop currently has no upper bound on tool-call iterations
-- [ ] Auto-retry with backoff on LLM call failure / malformed tool args (currently one throw = whole run dies)
-- [ ] Real tool-name consistency pass — `packages/core/tools/index.ts` (`read_file`/`write_file`/`edit_file`) is unused dead code, agent.ts dispatches on `read`/`write`/`edit`/`bash` from the provider schemas instead. Pick one source of truth.
+- [x] Max turns safety valve — `MAX_TURNS = 25` in `agent.ts`, loop returns a structured stopped-response instead of looping forever
+- [x] Auto-retry with backoff on LLM call failure — `withRetry()` in `agent.ts`, 3 attempts, linear backoff, wraps `LLMCall`; real last error now surfaces instead of a swallowed generic message
+- [x] Real tool-name consistency pass — `packages/core/tools/index.ts` `Tool.name` fields (`read_file`/`write_file`/`edit_file`) renamed to match the actual dispatch names (`read`/`write`/`edit`) used by agent.ts and the provider schemas
 - [ ] Context compaction — right now `messages[]` grows unbounded; will blow context window on any real multi-step SWE task
 
 ### Steering / long-running tasks (your idea)
@@ -203,6 +203,6 @@ Ordered roughly by leverage. Goal: get this to a state where a SWE-bench Lite ru
 - [ ] Track basic eval metrics: task success rate, tool-call count per task, tokens per task, wall-clock time — these are the numbers worth putting on a resume, not just "ran SWE-bench"
 
 ### Other high-value additions
-- [ ] Guard rails / permission prompts before bash/write/edit (currently the agent can run any shell command with zero confirmation — fine for a sandboxed benchmark run, not fine as a general CLI tool)
+- [x] Guard rails / permission prompts before bash/write/edit — `AgentRequest.confirmTool` callback, gated in `agent.ts` for `write`/`edit`/`bash` (not `read`, non-destructive); `apps/pi-cli` wires it to a real `readline/promises` y/N terminal prompt in `prompt.ts`; decline returns a tool-result telling the LLM the user said no, doesn't throw
 - [ ] Proper streaming from the LLM providers (SSE) instead of one-shot `.create()` calls — needed for both TUI and lower perceived latency
 - [ ] Subagent spawning — one agent call delegating a sub-task to another agent call, already scoped in the original planner.md "Future Scope"

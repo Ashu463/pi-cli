@@ -1,13 +1,27 @@
 import { Command } from "commander";
 import fs from 'fs'
 import { AgentCall } from "@repo/core";
-import { AgentRequest } from "../../../../packages/core/models/model";
+import { AgentRequest, ToolCall } from "../../../../packages/core/models/model";
 import { sessionPath, settingsFile } from "./config";
 import { randomUUID } from "crypto";
 import process from 'process'
 import { AgentResponse } from "../../../../packages/core/models/clientTypes";
 import path from 'path'
 import os from 'os'
+import readline from 'readline/promises'
+
+async function confirmTool(call: ToolCall): Promise<boolean> {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+    try {
+        const detail = call.name === "bash"
+            ? `command: ${call.input.command}`
+            : `path: ${call.input.path}`
+        const answer = await rl.question(`\n[confirm] run tool "${call.name}" (${detail})? [y/N] `)
+        return answer.trim().toLowerCase() === "y"
+    } finally {
+        rl.close()
+    }
+}
 if(!fs.existsSync(sessionPath)){
     fs.mkdirSync(sessionPath, {recursive: true})
 }
@@ -39,7 +53,8 @@ export const prompt = new Command("prompt")
                 provider: obj.defaultProvider,
                 model: obj.defaultModel,
                 apiKey: obj.key,
-                cwd: process.cwd()
+                cwd: process.cwd(),
+                confirmTool
             }
         }
         else{
@@ -49,7 +64,8 @@ export const prompt = new Command("prompt")
                 model: obj.defaultModel,
                 apiKey: obj.key,
                 sessionId: randomUUID(),
-                cwd: process.cwd()
+                cwd: process.cwd(),
+                confirmTool
             }
         }
         console.log("calling agent")

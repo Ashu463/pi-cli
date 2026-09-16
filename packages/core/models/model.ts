@@ -5,7 +5,8 @@ export interface AgentRequest{
     model: string,
     apiKey: string,
     sessionId?: string,
-    cwd: string
+    cwd: string,
+    confirmTool?: (call: ToolCall) => Promise<boolean>
 }
 
 export interface LLMRequest{

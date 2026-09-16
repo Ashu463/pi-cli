@@ -3,7 +3,7 @@ import { Tool } from "../models/model"
 import { Bash, EditFile, ReadFile, WriteFile } from "./tools"
 
 export const readFileTool: Tool = {
-  name: "read_file",
+  name: "read",
   description: "Read the contents of a file at the given path. Returns the file content as text. Use this to inspect source code, config files, or any text-based file before editing it.",
   input_schema: {
     type: "object",
@@ -16,7 +16,7 @@ export const readFileTool: Tool = {
 }
 
 export const writeFileTool: Tool = {
-  name: "write_file",
+  name: "write",
   description: "Write content to a file, creating it if it doesn't exist or overwriting it if it does. Creates parent directories automatically. Use this to create new files or fully replace existing file content.",
   input_schema: {
     type: "object",
@@ -30,8 +30,8 @@ export const writeFileTool: Tool = {
 }
 
 export const editFileTool: Tool = {
-  name: "edit_file",
-  description: "Edit a file by replacing an exact, unique occurrence of old_string with new_string. old_string must match the file content exactly (including whitespace/indentation) and must appear exactly once in the file. Use read_file first to get the exact text to match.",
+  name: "edit",
+  description: "Edit a file by replacing an exact, unique occurrence of old_string with new_string. old_string must match the file content exactly (including whitespace/indentation) and must appear exactly once in the file. Use read first to get the exact text to match.",
   input_schema: {
     type: "object",
     properties: {

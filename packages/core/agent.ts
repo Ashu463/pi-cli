@@ -5,6 +5,28 @@ import { AgentRequest, ChatMessage, LLMContext, LLMRequest, LLMResponse, Message
 import { bashTool, editFileTool, readFileTool, writeFileTool } from "./tools";
 import { systemPrompt } from "./config";
 import { addMemory, searchMemory } from "./memory";
+
+const MAX_TURNS = 25
+const LLM_RETRY_ATTEMPTS = 3
+const LLM_RETRY_BACKOFF_MS = 500
+const DESTRUCTIVE_TOOLS = new Set(["write", "edit", "bash"])
+
+async function withRetry<T>(label: string, maxAttempts: number, fn: () => Promise<T>): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn()
+    } catch (e) {
+      lastError = e
+      const message = e instanceof Error ? e.message : String(e)
+      console.warn(`[Agent] ${label} failed (attempt ${attempt}/${maxAttempts}): ${message}`)
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, LLM_RETRY_BACKOFF_MS * attempt))
+      }
+    }
+  }
+  throw lastError
+}
 /*
 - fetch data in form of LLMRequest
 - inject system prompt to the user prompt
@@ -66,8 +88,29 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
 
   // while (true) {
     let hasMoreToolCalls = true
+    let turnCount = 0
 
     while (hasMoreToolCalls) {
+      turnCount++
+      if (turnCount > MAX_TURNS) {
+        console.log(`stopping after reaching max turns (${MAX_TURNS})`)
+        data.push({
+          id: randomBytes(4).toString("hex"),
+          parentId: lastNodeId,
+          type: "message",
+          role: "assistant",
+          message: {
+            content: `Stopped: exceeded max turns (${MAX_TURNS})`
+          },
+          timestamp: new Date().toISOString()
+        })
+        return {
+          message: `Stopped: exceeded max turns (${MAX_TURNS})`,
+          toolResult: ToolResult,
+          data: data
+        }
+      }
+
       const response: LLMResponse = await streamLLM(req, messages, relevantMemories)
       console.log(response, " is the reponse from LLM inside runLooop")
 
@@ -135,6 +178,12 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         if(response.toolCalls){
           const results = await Promise.all(response.toolCalls.map(async (call) => {
             try{
+              if (DESTRUCTIVE_TOOLS.has(call.name) && req.confirmTool) {
+                const approved = await req.confirmTool(call)
+                if (!approved) {
+                  return { call, result: `User declined to run tool "${call.name}". Do not retry it without asking again.`, isError: true }
+                }
+              }
               let result: string
               switch(call.name){
                 case "read":
@@ -255,10 +304,5 @@ async function streamLLM(req: AgentRequest, messages: ChatMessage[], relevantMem
   }
   const llmReq: LLMRequest = { ...req, llmContext }
 
-  try {
-    const response = await LLMCall(llmReq)
-    return response
-  } catch (e) {
-    throw new Error("Error while fetching the response")
-  }
+  return withRetry("LLM call", LLM_RETRY_ATTEMPTS, () => LLMCall(llmReq))
 }
