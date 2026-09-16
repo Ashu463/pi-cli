@@ -57,5 +57,3 @@ export const bashTool: Tool = {
   },
   execute: Bash
 }
-
-export const allTools: Tool[] = [readFileTool, writeFileTool, editFileTool, bashTool]

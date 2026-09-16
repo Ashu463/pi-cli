@@ -7,6 +7,7 @@ export interface AgentRequest{
     sessionId?: string,
     cwd: string,
     confirmTool?: (call: ToolCall) => Promise<boolean>
+    onToken?: (delta: string) => void
 }
 
 export interface LLMRequest{
@@ -14,6 +15,7 @@ export interface LLMRequest{
     model: string,
     apiKey: string,
     llmContext: LLMContext
+    onToken?: (delta: string) => void
 }
 export interface LLMContext{
     messages: ChatMessage[],
@@ -46,30 +48,7 @@ export interface Tool {
   input_schema: Record<string, unknown>
   execute: (input: Record<string, unknown>) => Promise<string>
 }
-export interface ReadTool{
-    name: "read"
-    filePath: string
-}
-export interface WriteTool{
-    name: "write"
-    filePath: string
-    content: string
-}
-export interface EditTool {
-    name: "edit"
-    filePath: string,
-    content: string
-}
-export interface BashTool {
-    name: "bash"
-    executionDirectory: string,
-    command: string
-}
-export interface AgentContext{
-
-}
-
-export type Message = { 
+export type Message = {
     role: "user" | "assistant"; 
     content: string 
 };

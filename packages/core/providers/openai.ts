@@ -1,6 +1,6 @@
-// import { AgentContext, LLMContext, Tool } from "../types";
 import OpenAI from 'openai'
 import { LLMContext, ToolName } from '../models/model';
+import { logger } from '../logger';
 
 const availableTools: OpenAI.Responses.Tool = {
   type: "namespace",
@@ -14,9 +14,9 @@ const availableTools: OpenAI.Responses.Tool = {
       parameters: {
         type: "object",
         properties: {
-          filePath: { type: "string" },
+          path: { type: "string" },
         },
-        required: ["filePath"],
+        required: ["path"],
         additionalProperties: false,
       },
     },
@@ -27,10 +27,10 @@ const availableTools: OpenAI.Responses.Tool = {
       parameters: {
         type: "object",
         properties: {
-          filePath: { type: "string" },
+          path: { type: "string" },
           content: { type: "string"}
         },
-        required: ["filePath", "content"],
+        required: ["path", "content"],
         additionalProperties: false,
       },
     },
@@ -50,20 +50,21 @@ const availableTools: OpenAI.Responses.Tool = {
     {
       type: "function",
       name: "edit",
-      description: "Edit file with given content",
+      description: "Edit a file by replacing an exact, unique occurrence of old_string with new_string",
       parameters: {
         type: "object",
         properties: {
-          filePath: { type: "string" },
-          content: { type: "string"}
+          path: { type: "string" },
+          old_string: { type: "string" },
+          new_string: { type: "string" }
         },
-        required: ["filePath", "content"],
+        required: ["path", "old_string", "new_string"],
         additionalProperties: false,
       },
     },
   ],
 };
-export async function OpenAICall(key: string, llmContext: LLMContext, model: string, toolList: ToolName[]){
+export async function OpenAICall(key: string, llmContext: LLMContext, model: string, toolList: ToolName[], onToken?: (delta: string) => void){
     const client = new OpenAI({
         apiKey: key
     });
@@ -87,19 +88,28 @@ export async function OpenAICall(key: string, llmContext: LLMContext, model: str
     })
 
     try{
-        const response = await client.responses.create({
+        const stream = await client.responses.create({
             model: model,
             input,
             instructions: llmContext.systemPrompt,
             tools:[availableTools, {type: "tool_search"}],
-            parallel_tool_calls: false
+            parallel_tool_calls: false,
+            stream: true
         })
-        
-        console.log("LLM generated, ", response)
-        console.log("Tools calls demanded are", response.tools)
-        return response
+
+        let finalResponse: OpenAI.Responses.Response | undefined
+        for await (const event of stream) {
+            if (event.type === "response.output_text.delta") {
+                onToken?.(event.delta)
+            } else if (event.type === "response.completed") {
+                finalResponse = event.response
+            }
+        }
+
+        logger.debug({ response: finalResponse }, "LLM generated response")
+        return finalResponse
     }catch(e){
-        console.log(e, " is the error occured while generating response")
+        logger.error({ err: e }, "error occurred while generating response")
         return ;
     }
 }

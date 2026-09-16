@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { Memory } from "mem0ai/oss";
 import os from 'os'
+import { logger } from '../logger'
 const memory = new Memory({
   llm: {
     provider: "deepseek",
@@ -46,10 +47,10 @@ async function main(){
 }
 main()
   .then(() => {
-    console.error("done");
+    logger.debug("memory service done");
     process.exit(0);
   })
   .catch((err) => {
-    console.error(err);
+    logger.error({ err }, "memory service failed");
     process.exit(1);
   });

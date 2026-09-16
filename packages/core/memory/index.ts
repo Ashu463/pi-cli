@@ -1,6 +1,7 @@
-import { spawnSync, execSync } from "child_process";
+import { spawnSync } from "child_process";
 import path from "path";
 import {Message}  from '../models/model'
+import { logger } from '../logger'
 const MEMORY_SERVICE = path.resolve(
   import.meta.dirname,
   "./memory-service.ts"
@@ -10,17 +11,8 @@ const PACKAGES_DIR = path.resolve(
   "../.."                // walk up to packages/
 );
 
-// resolve node path once at module load time
-const NODE_BIN = (() => {
-  try {
-    return execSync("which node", { encoding: "utf-8" }).trim();
-  } catch {
-    return "node"; // fallback
-  }
-})();
 function callMemoryService(command: string, payload: string): unknown {
-    
-console.log(payload, command, " are the req headers")
+  logger.debug({ command, payload }, "calling memory service")
   const result = spawnSync(
     "bunx",
     ["tsx", MEMORY_SERVICE, command, payload],

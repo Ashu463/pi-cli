@@ -2,6 +2,7 @@ import { Command } from "commander";
 import os from 'os'
 import path from 'path'
 import fs from 'fs'
+import { logger } from "@repo/core";
 import { authFile, modelsFile, rootPath } from "./config";
 
 fs.mkdirSync(rootPath, { recursive: true });
@@ -9,7 +10,8 @@ fs.mkdirSync(rootPath, { recursive: true });
 
 async function ValidateAPIKey(key: string, provider: string): Promise<boolean>{
     let url = ""
-    console.log(key, " ", provider)
+    logger.debug({ provider, keyPrefix: key?.slice(0, 4) }, "validating API key")
+    // don't log the raw key — only enough to confirm one was passed.
 
     let obj = []
 
@@ -22,7 +24,7 @@ async function ValidateAPIKey(key: string, provider: string): Promise<boolean>{
     }
 
     if(provider === "openai"){
-        console.log("inside openai checker")
+        logger.debug("checking openai credentials")
 
         url = "https://api.openai.com/v1/models"
         try{
@@ -35,26 +37,24 @@ async function ValidateAPIKey(key: string, provider: string): Promise<boolean>{
             })
             if(res.ok){
                 const data = await res.json()
-                console.log("inside deepseek checker and res", data)
                 const models: any = []
                 data.data.map((data: any) =>{
                     models.push(data.id)
-                    console.log(data.id, " is the model name pushing into it")
                 })
                 obj.push({provider: provider, models: models})
-    
+                logger.debug({ provider, modelCount: models.length }, "fetched models")
+
                 fs.writeFileSync(modelsFile, JSON.stringify(obj, null, 2))
-                console.log("returning true")
                 return true;
             }
         }
         catch(e){
-            console.log("Authentication for openAI failed", e)
+            logger.error({ err: e }, "authentication for openai failed")
             return false
         }
     }
     else if(provider === "anthropic"){
-        console.log("inside claude checker")
+        logger.debug("checking anthropic credentials")
         url = "https://api.anthropic.com/v1/models"
         try{
             const res = await fetch(url, {
@@ -65,21 +65,19 @@ async function ValidateAPIKey(key: string, provider: string): Promise<boolean>{
             })
             if(res.ok){
                 const data = await res.json()
-                console.log("inside deepseek checker and res", data)
                 const models: any = []
                 data.data.map((data: any) =>{
                     models.push(data.id)
-                    console.log(data.id, " is the model name pushing into it")
                 })
                 obj.push({provider: provider, models: models})
-    
+                logger.debug({ provider, modelCount: models.length }, "fetched models")
+
                 fs.writeFileSync(modelsFile, JSON.stringify(obj, null, 2))
-                console.log("returning true")
                 return true;
             }
         }
         catch(e){
-            console.log("Auth failed with anthropic", e)
+            logger.error({ err: e }, "authentication for anthropic failed")
             return false
         }
     }
@@ -87,32 +85,30 @@ async function ValidateAPIKey(key: string, provider: string): Promise<boolean>{
         url = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`
         try{
             const res = await fetch(url)
-            console.log("inside gemini checker and res", res.ok)
+            logger.debug({ ok: res.ok }, "checking google credentials")
             if(res.ok){
                 const data = await res.json()
-                console.log("inside deepseek checker and res", data)
                 const models: any = []
                 data.data.map((data: any) =>{
                     models.push(data.id)
-                    console.log(data.id, " is the model name pushing into it")
                 })
                 obj.push({provider: provider, models: models})
-    
+                logger.debug({ provider, modelCount: models.length }, "fetched models")
+
                 fs.writeFileSync(modelsFile, JSON.stringify(obj, null, 2))
-                console.log("returning true")
                 return true;
             }
             // else return false
         }
         catch(e){
-            console.log("Auth failed for gemini", e)
+            logger.error({ err: e }, "authentication for google failed")
             return false
         }
 
     }
     else if(provider === "deepseek"){
         url = `https://api.deepseek.com/models`
-        
+
         try{
             const res = await fetch(url, {
                 method: 'GET',
@@ -121,25 +117,23 @@ async function ValidateAPIKey(key: string, provider: string): Promise<boolean>{
                     'Authorization': `Bearer ${key}`
                 }
             })
-            
+
             if(res.ok){
                 const data = await res.json()
-                console.log("inside deepseek checker and res", data)
                 const models: any = []
                 data.data.map((data: any) =>{
                     models.push(data.id)
-                    console.log(data.id, " is the model name pushing into it")
                 })
                 obj.push({provider: provider, models: models})
-    
+                logger.debug({ provider, modelCount: models.length }, "fetched models")
+
                 fs.writeFileSync(modelsFile, JSON.stringify(obj, null, 2))
-                console.log("returning true")
                 return true;
             }
             // else return false
         }
         catch(e){
-            console.log("Auth failed for gemini", e)
+            logger.error({ err: e }, "authentication for deepseek failed")
             return false
         }
     }
@@ -154,9 +148,7 @@ export const login = new Command("login").description('login command')
     .action(async (options) =>{
         const apiKey : string = options.api_key
         const provider: string = options.provider
-        console.log(options, ' is the')
-        console.log("login command hit", apiKey, provider )
-        console.log(rootPath, ' is the credentials path')
+        logger.debug({ provider, rootPath }, "login command hit")
         const res : Promise<boolean> = ValidateAPIKey(apiKey, provider)
 
        

@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { logger } from '../logger'
 
 
 export async function ReadFile(input: Record<string, unknown>): Promise<string> {
@@ -17,7 +18,7 @@ export async function WriteFile(input: Record<string, unknown>): Promise<string>
   try {
     if(!fs.existsSync(filePath))
     fs.mkdir(path.dirname(filePath), (err) =>{
-        console.log("Error occurred while creating directory")
+        if (err) logger.error({ err }, "error occurred while creating directory")
     })
 
     fs.writeFileSync(filePath, content, "utf-8")

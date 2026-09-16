@@ -1,14 +1,15 @@
 import { Command } from "commander"
 import fs from 'fs'
+import { logger } from "@repo/core"
 import { authFile, settingsFile } from "./config"
 export const logout = new Command("logout")
     .description('logout')
     .action((options) => {
-        console.log("logout command hit", options)
+        logger.debug({ options }, "logout command hit")
 
         fs.unlink(settingsFile, (err) =>{
             if(err){
-                console.log("error occurred while deleting settings the file")
+                logger.error({ err }, "error occurred while deleting settings file")
                 return ;
             }
 
@@ -17,7 +18,7 @@ export const logout = new Command("logout")
 
         fs.unlink(authFile, (err) =>{
             if(err){
-                console.log("error occurred while deleting auth the file")
+                logger.error({ err }, "error occurred while deleting auth file")
                 return ;
             }
 

@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import fs from 'fs'
-import { AgentCall } from "@repo/core";
+import { AgentCall, logger } from "@repo/core";
 import { AgentRequest, ToolCall } from "../../../../packages/core/models/model";
 import { sessionPath, settingsFile } from "./config";
 import { randomUUID } from "crypto";
@@ -35,7 +35,7 @@ export const prompt = new Command("prompt")
     .option('--p <prompt>', "prompt string")
     .option('--sessionName <sessionName>', "give the session name to use while continuing this prompt")
     .action((options) =>{
-        console.log("prompts command hit", options)
+        logger.debug({ options }, "prompt command hit")
         const prompt = options.p
         let sessionName: string = options.sessionName
         
@@ -46,6 +46,8 @@ export const prompt = new Command("prompt")
         if (!sessionName) {
             sessionName = new Date().toISOString().replace(/[:.]/g, "-") + "_" + randomUUID() + ".jsonl"
         }
+        const onToken = (delta: string) => process.stdout.write(delta)
+
         let req: AgentRequest
         if(!sessionName){
             req = {
@@ -54,7 +56,8 @@ export const prompt = new Command("prompt")
                 model: obj.defaultModel,
                 apiKey: obj.key,
                 cwd: process.cwd(),
-                confirmTool
+                confirmTool,
+                onToken
             }
         }
         else{
@@ -65,16 +68,20 @@ export const prompt = new Command("prompt")
                 apiKey: obj.key,
                 sessionId: randomUUID(),
                 cwd: process.cwd(),
-                confirmTool
+                confirmTool,
+                onToken
             }
         }
-        console.log("calling agent")
+        logger.debug({ provider: req.provider, model: req.model }, "calling agent")
+        console.log(`\n  Q: ${prompt}`)
+        process.stdout.write(`  A: `)
         const response : Promise<AgentResponse | undefined> = AgentCall(req)
         response.then((res: any) => {
-            console.log(res, " is the llm response")
+            logger.debug({ res }, "agent response received")
             const sessionData = res.data
 
-            console.log(`\n  Q: ${prompt}\n  A: ${res.message}\n ToolResults: ${res.toolResult}`)
+            process.stdout.write(`\n`)
+            if (res.toolResult) console.log(` ToolResults: ${res.toolResult}`)
 
         // session write
         try {
@@ -94,12 +101,12 @@ export const prompt = new Command("prompt")
             }
             console.log(`[session] saved to ${directoryPath}`)
         } catch (e) {
-            console.error(`[session] failed to save:`, e)
+            logger.error({ err: e }, "session failed to save")
         }
 
         })
         .catch((e) => {
-            console.error(`[agent] AgentCall failed:`, e)
+            logger.error({ err: e }, "AgentCall failed")
         })
         
         // write into the session file by creating a new one with given timestamp

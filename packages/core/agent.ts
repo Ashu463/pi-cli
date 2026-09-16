@@ -5,11 +5,13 @@ import { AgentRequest, ChatMessage, LLMContext, LLMRequest, LLMResponse, Message
 import { bashTool, editFileTool, readFileTool, writeFileTool } from "./tools";
 import { systemPrompt } from "./config";
 import { addMemory, searchMemory } from "./memory";
+import { logger } from "./logger";
 
 const MAX_TURNS = 25
 const LLM_RETRY_ATTEMPTS = 3
 const LLM_RETRY_BACKOFF_MS = 500
 const DESTRUCTIVE_TOOLS = new Set(["write", "edit", "bash"])
+const MEMORY_ENABLED = process.env.MEMORY_ENABLED === "true"
 
 async function withRetry<T>(label: string, maxAttempts: number, fn: () => Promise<T>): Promise<T> {
   let lastError: unknown
@@ -19,7 +21,7 @@ async function withRetry<T>(label: string, maxAttempts: number, fn: () => Promis
     } catch (e) {
       lastError = e
       const message = e instanceof Error ? e.message : String(e)
-      console.warn(`[Agent] ${label} failed (attempt ${attempt}/${maxAttempts}): ${message}`)
+      logger.warn({ label, attempt, maxAttempts, error: message }, "retry attempt failed")
       if (attempt < maxAttempts) {
         await new Promise((resolve) => setTimeout(resolve, LLM_RETRY_BACKOFF_MS * attempt))
       }
@@ -83,8 +85,15 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
   })
   lastNodeId = userNodeId
   messages.push({ role: "user", content: req.message })
-  const relevantMemories = searchMemory(req.message);
-  console.log(relevantMemories, " is the fetched memory")
+  let relevantMemories = ""
+  if (MEMORY_ENABLED) {
+    try {
+      relevantMemories = searchMemory(req.message)
+      logger.debug({ relevantMemories }, "fetched memory")
+    } catch (e) {
+      logger.warn({ err: e }, "memory search failed, continuing without it")
+    }
+  }
 
   // while (true) {
     let hasMoreToolCalls = true
@@ -93,7 +102,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
     while (hasMoreToolCalls) {
       turnCount++
       if (turnCount > MAX_TURNS) {
-        console.log(`stopping after reaching max turns (${MAX_TURNS})`)
+        logger.warn({ maxTurns: MAX_TURNS }, "stopping after reaching max turns")
         data.push({
           id: randomBytes(4).toString("hex"),
           parentId: lastNodeId,
@@ -112,7 +121,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
       }
 
       const response: LLMResponse = await streamLLM(req, messages, relevantMemories)
-      console.log(response, " is the reponse from LLM inside runLooop")
+      logger.debug({ response }, "LLM response received")
 
       const assistantNodeId = randomBytes(4).toString("hex")
       data.push({
@@ -129,7 +138,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
       lastNodeId = assistantNodeId
       messages.push({ role: "assistant", content: response.output, toolCalls: response.toolCalls })
       if (response.stopReason === 'aborted') {
-        console.log("stopping LLM due to aborting")
+        logger.warn("stopping LLM due to aborting")
 
         data.push({
           id: randomBytes(4).toString("hex"),
@@ -148,7 +157,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         }
       }
       if(response.stopReason === 'error'){
-        console.log("stopping LLM due to error")
+        logger.error("stopping LLM due to error")
         data.push({
           id: randomBytes(4).toString("hex"),
           parentId: lastNodeId, // #TODO: implement tree and store prev node id here.
@@ -167,7 +176,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
       }
       // var context: AgentContext[]
       if (response.stopReason === 'toolCall') {
-        console.log("Inside tool call handling of runLoop", response.output)
+        logger.debug({ output: response.output }, "handling tool call")
         // extract tool calls from response
         // execute each tool
         // append results to context
@@ -230,7 +239,7 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
             })
             lastNodeId = toolNodeId
             messages.push({ role: "tool", toolCallId: call.id, name: call.name, content: result })
-            console.log(result, " is the result")
+            logger.debug({ tool: call.name, result }, "tool call result")
           }
         }
 
@@ -275,9 +284,14 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         role: e.role as "user" | "assistant",
         content: e.message.content as string,
     }));
-    console.log(newTurns, " is the payload to send in add memory")
-    const addMemoryRes = addMemory(newTurns)
-    console.log(addMemoryRes, " is the memory res")
+    if (MEMORY_ENABLED) {
+      try {
+        logger.debug({ newTurns }, "payload sent to memory")
+        addMemory(newTurns)
+      } catch (e) {
+        logger.warn({ err: e }, "memory add failed, continuing without it")
+      }
+    }
   //   break;
 
   //   // outer loop: wait for next user input / steering / followup

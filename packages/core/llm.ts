@@ -20,28 +20,27 @@ that means LLM call will have list of available tools, message,(might be user + 
 import { AnthropicCall } from "./providers/anthropic";
 import { OpenAICall } from "./providers/openai";
 import { DeepseekCall } from './providers/deepseek'
-// import { LLMRequest, LLMResponse, Tool } from "./types";
 import { LLMRequest, LLMResponse, ToolCall, ToolName } from "./models/model";
+import { logger } from "./logger";
 
 const availableTools: ToolName[] = ["bash", "edit", "read", "write"]
 
 export async function LLMCall(req: LLMRequest): Promise<LLMResponse> {
-  const { apiKey, provider, model, llmContext } = req
-    console.log(req, " is the llm req ")
+  const { apiKey, provider, model, llmContext, onToken } = req
+  logger.debug({ provider, model, llmContext }, "LLM request")
 
   if (provider === "openai") {
-    const res = await OpenAICall(apiKey, llmContext, model, availableTools)
+    const res = await OpenAICall(apiKey, llmContext, model, availableTools, onToken)
     return normalizeOpenAIResponse(res)
   }
 
-  // if (provider === "anthropic") {
-  //   console.log("calling anthropic")
-  //   const res = await AnthropicCall(key, llmContext, model, tools)
-  //   return normalizeAnthropicResponse(res)
-  // }
+  if (provider === "anthropic") {
+    const res = await AnthropicCall(apiKey, llmContext, model, availableTools, onToken)
+    return normalizeAnthropicResponse(res)
+  }
 
   if (provider === "deepseek") {
-    const res = await DeepseekCall(apiKey, llmContext, model, availableTools)
+    const res = await DeepseekCall(apiKey, llmContext, model, availableTools, onToken)
     return normalizeOpenAIResponse(res) // DeepSeek is OpenAI-compatible
   }
 
@@ -58,7 +57,7 @@ export async function LLMCall(req: LLMRequest): Promise<LLMResponse> {
 function normalizeOpenAIResponse(res: any): LLMResponse {
   const message = res.choices[0].message
   const finishReason = res.choices[0].finish_reason
-  console.log(message.tool_calls, " is the message response recieved from openai/deepseek")
+  logger.debug({ toolCalls: message.tool_calls }, "message response received from openai/deepseek")
 
   const toolCalls: ToolCall[] | undefined = (message.tool_calls ?? []).map((tc: any) => ({
     id: tc.id,
@@ -80,13 +79,18 @@ function normalizeAnthropicResponse(res: any): LLMResponse {
   const textBlocks = res.content.filter((b: any) => b.type === "text")
   const toolBlocks = res.content.filter((b: any) => b.type === "tool_use")
 
+  const toolCalls: ToolCall[] = toolBlocks.map((b: any) => ({
+    id: b.id,
+    name: b.name,
+    input: b.input
+  }))
+
   return {
     stopReason: res.stop_reason === "tool_use" ? "toolCall"
       : res.stop_reason === "end_turn" ? "completed"
       : "aborted",
     output: textBlocks.map((b: any) => b.text).join("\n"),
-    toolCalls: []
-   
+    toolCalls: toolCalls.length > 0 ? toolCalls : undefined
   }
 }
 
