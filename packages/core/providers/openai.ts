@@ -68,10 +68,28 @@ export async function OpenAICall(key: string, llmContext: LLMContext, model: str
         apiKey: key
     });
 
+    const input: OpenAI.Responses.ResponseInputItem[] = llmContext.messages.flatMap((m): OpenAI.Responses.ResponseInputItem[] => {
+        if (m.role === 'tool') {
+            return [{ type: 'function_call_output', call_id: m.toolCallId, output: m.content }]
+        }
+        if (m.role === 'assistant') {
+            const calls: OpenAI.Responses.ResponseInputItem[] = (m.toolCalls ?? []).map(tc => ({
+                type: 'function_call',
+                call_id: tc.id,
+                name: tc.name,
+                arguments: JSON.stringify(tc.input)
+            }))
+            return m.content
+                ? [{ role: 'assistant', content: m.content } as OpenAI.Responses.ResponseInputItem, ...calls]
+                : calls
+        }
+        return [{ role: 'user', content: m.content }]
+    })
+
     try{
         const response = await client.responses.create({
             model: model,
-            input: llmContext.content,
+            input,
             instructions: llmContext.systemPrompt,
             tools:[availableTools, {type: "tool_search"}],
             parallel_tool_calls: false

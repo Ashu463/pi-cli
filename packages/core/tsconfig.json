@@ -1,7 +1,12 @@
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "types": ["bun", "node"]
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "types": ["bun", "node"],
+    "skipLibCheck": true,
+    "noEmit": true
   },
   "include": ["**/*.ts"]
 }

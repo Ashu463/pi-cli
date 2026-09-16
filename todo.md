@@ -163,3 +163,46 @@ return newMessages
 - Free alternative: Google Gemini Flash API — free tier, no billing required under quota
 - Set via env var: ANTHROPIC_API_KEY or GEMINI_API_KEY
 - Do not use expensive models (Opus, Sonnet) for loop testing — Haiku is sufficient
+
+---
+
+## Post-MVP: Correctness Fixes (2026-09-16)
+Found while reviewing the published MVP against real agent-loop mechanics. All fixed:
+- [x] `ReadFile`/`EditFile` called `JSON.parse` on raw file content — broke on any non-JSON file
+- [x] Agent loop had no real `messages[]` history — was mutating `req.message` with string concat each turn instead of threading conversation state
+- [x] OpenAI/Deepseek providers now send full message history (including tool results) instead of one flattened string
+- [x] Session tree `id`/`parentId` were hardcoded placeholder strings (`"random id for now"` etc.) — now a real chain
+- [x] Tool calls executed sequentially in a loop — now `Promise.all` (parallel, matches real Pi/Claude Code loop)
+- [x] `bash` tool had no timeout — a hung command hung the whole agent forever; added 30s timeout + output truncation
+- [x] `packages/core/tsconfig.json` extended a root `tsconfig.json` that didn't exist — check-types was silently broken; gave it its own base config
+- [x] `apps/pi-cli/tsconfig.json` had a dead `express` path mapping and an invalid `ignoreDeprecations` value blocking typecheck — removed
+
+## Roadmap — closing the gap with real Pi / Claude Code
+Ordered roughly by leverage. Goal: get this to a state where a SWE-bench Lite run is a meaningful signal, not a foregone 0%.
+
+### Near-term (unblocks everything else)
+- [ ] Anthropic provider is dead code (disconnected in `llm.ts`, different signature, no tool support) — either wire it up properly or delete it
+- [ ] Max turns safety valve — loop currently has no upper bound on tool-call iterations
+- [ ] Auto-retry with backoff on LLM call failure / malformed tool args (currently one throw = whole run dies)
+- [ ] Real tool-name consistency pass — `packages/core/tools/index.ts` (`read_file`/`write_file`/`edit_file`) is unused dead code, agent.ts dispatches on `read`/`write`/`edit`/`bash` from the provider schemas instead. Pick one source of truth.
+- [ ] Context compaction — right now `messages[]` grows unbounded; will blow context window on any real multi-step SWE task
+
+### Steering / long-running tasks (your idea)
+- [ ] followUp / steer message queue — let a user inject a new instruction mid-run without killing the loop, matches the "steer → injected at top of next turn" invariant already documented above
+- [ ] Abort/interrupt handling that actually cancels an in-flight LLM stream, not just a flag checked after the fact
+- [ ] Background/async task mode — kick off a long task, detach, reattach later (this is what makes "long running task" meaningfully different from a single CLI call)
+
+### TUI (your idea)
+- [ ] Streaming token output to terminal (currently fully non-streaming — whole response arrives, then prints)
+- [ ] Live view of tool calls as they execute, not just post-hoc console.log
+- [ ] Session/branch picker — the JSONL tree exists conceptually (parentId chain) but nothing surfaces it to a user
+
+### Evals / benchmarking (your idea)
+- [ ] Write ~10-20 hand-picked small coding tasks first (read/edit/bash only, no SWE-bench harness yet) — cheap way to catch loop bugs before spending API credits on a real benchmark
+- [ ] Then SWE-bench Lite subset once the above is stable
+- [ ] Track basic eval metrics: task success rate, tool-call count per task, tokens per task, wall-clock time — these are the numbers worth putting on a resume, not just "ran SWE-bench"
+
+### Other high-value additions
+- [ ] Guard rails / permission prompts before bash/write/edit (currently the agent can run any shell command with zero confirmation — fine for a sandboxed benchmark run, not fine as a general CLI tool)
+- [ ] Proper streaming from the LLM providers (SSE) instead of one-shot `.create()` calls — needed for both TUI and lower perceived latency
+- [ ] Subagent spawning — one agent call delegating a sub-task to another agent call, already scoped in the original planner.md "Future Scope"

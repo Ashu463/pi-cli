@@ -63,21 +63,36 @@ const deepseekTools: OpenAI.Chat.ChatCompletionTool[] = [
     }
   }
 ];
-export async function DeepseekCall(key: string, llmMessage: LLMContext, model: string, toolList: ToolName[]){
+export async function DeepseekCall(key: string, llmContext: LLMContext, model: string, toolList: ToolName[]){
     const client = new OpenAI({
         baseURL: 'https://api.deepseek.com',
         apiKey: key
 
     });
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        { role: 'system', content: llmContext.systemPrompt },
+        ...llmContext.messages.map((m): OpenAI.Chat.ChatCompletionMessageParam => {
+            if (m.role === 'tool') {
+                return { role: 'tool', tool_call_id: m.toolCallId, content: m.content }
+            }
+            if (m.role === 'assistant') {
+                return {
+                    role: 'assistant',
+                    content: m.content,
+                    tool_calls: m.toolCalls?.map(tc => ({
+                        id: tc.id,
+                        type: 'function',
+                        function: { name: tc.name, arguments: JSON.stringify(tc.input) }
+                    }))
+                }
+            }
+            return { role: 'user', content: m.content }
+        })
+    ]
     try{
         const response = await client.chat.completions.create({
             model: "deepseek-chat",
-            messages: [
-                {
-                  role: 'user',
-                  content: llmMessage.content + llmMessage.systemPrompt
-                }
-            ],
+            messages,
             tools: deepseekTools,
             tool_choice: "auto"
         })

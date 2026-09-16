@@ -83,7 +83,7 @@ export const prompt = new Command("prompt")
 
         })
         .catch((e) => {
-        console.error(`[agent] AgentCall failed:`, e)
+            console.error(`[agent] AgentCall failed:`, e)
         })
         
         // write into the session file by creating a new one with given timestamp

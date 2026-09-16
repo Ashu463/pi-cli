@@ -11,14 +11,19 @@ export interface AgentRequest{
 export interface LLMRequest{
     provider: string,
     model: string,
-    apiKey: string, 
+    apiKey: string,
     llmContext: LLMContext
 }
 export interface LLMContext{
-    content: string,
+    messages: ChatMessage[],
     systemPrompt: string,
     tools: ToolName[]
 }
+
+export type ChatMessage =
+    | { role: "user"; content: string }
+    | { role: "assistant"; content: string; toolCalls?: ToolCall[] }
+    | { role: "tool"; toolCallId: string; name: string; content: string }
 
 export type ToolName = "read" | "write" | "edit" | "bash"
 type stopReason = "completed" | "toolCall" | "aborted" | "error"

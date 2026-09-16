@@ -1,8 +1,7 @@
 import { randomBytes, randomUUID } from "crypto";
-import { getAllTools } from "../tools";
 import { LLMCall } from "./llm";
 import { AgentResponse, message, SessionData } from "./models/clientTypes";
-import { AgentRequest, LLMContext, LLMRequest, LLMResponse, Message, ToolName } from "./models/model";
+import { AgentRequest, ChatMessage, LLMContext, LLMRequest, LLMResponse, Message, ToolName } from "./models/model";
 import { bashTool, editFileTool, readFileTool, writeFileTool } from "./tools";
 import { systemPrompt } from "./config";
 import { addMemory, searchMemory } from "./memory";
@@ -11,8 +10,8 @@ import { addMemory, searchMemory } from "./memory";
 - inject system prompt to the user prompt
 - run loop here with these params
 - store into the sessions array
-- update the memory 
-- update context. 
+- update the memory
+- update context.
 */
 
 export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
@@ -21,32 +20,37 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
   // adding this prompt into context or it's summary version
   // make the LLM call
   // judege whether the response happened due to tool call or completed
-  // fetch the tool calls needed. 
+  // fetch the tool calls needed.
   // execute the tool calls
-  // save their results 
-  // repeat the process. 
+  // save their results
+  // repeat the process.
 
-  let firstTurn = true;
   let ToolResult :string = ""
   let finalOutput : string = ""
-  let agentRes: AgentResponse 
-  
+  let agentRes: AgentResponse
+
   let data: SessionData[] = []
-  // 
+  // messages sent to the LLM every call — this is where conversation history actually lives.
+  const messages: ChatMessage[] = []
+  let lastNodeId: string = "root"
+  //
   // first create session
   if(req.sessionId){
+    const sessionNodeId = randomUUID()
     data.push({
-      id: randomUUID(),
-      parentId: "random-abhi-ke-liye",
+      id: sessionNodeId,
+      parentId: lastNodeId,
       timestamp: new Date().toISOString(),
       type: "session",
       sessionId: req.sessionId,
       cwd: req.cwd
     })
-  }  
+    lastNodeId = sessionNodeId
+  }
+  const userNodeId = randomBytes(4).toString("hex")
   data.push({
-    id: randomBytes(4).toString(),
-    parentId: "randome abhi ke liye", // #TODO: implement tree and store prev node id here.
+    id: userNodeId,
+    parentId: lastNodeId,
     type: "message",
     role: "user",
     message: {
@@ -55,24 +59,22 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
     },
     timestamp: new Date().toISOString()
   })
+  lastNodeId = userNodeId
+  messages.push({ role: "user", content: req.message })
   const relevantMemories = searchMemory(req.message);
   console.log(relevantMemories, " is the fetched memory")
-  
+
   // while (true) {
     let hasMoreToolCalls = true
 
     while (hasMoreToolCalls) {
-      if(!firstTurn){
-        req.message += ToolResult
-      }
-      else firstTurn = false;
-
-      const response: LLMResponse = await streamLLM(req, relevantMemories)
+      const response: LLMResponse = await streamLLM(req, messages, relevantMemories)
       console.log(response, " is the reponse from LLM inside runLooop")
-      
+
+      const assistantNodeId = randomBytes(4).toString("hex")
       data.push({
-        id: randomBytes(4).toString(),
-        parentId: "random id for now",
+        id: assistantNodeId,
+        parentId: lastNodeId,
         type: 'message',
         role: 'assistant',
         message: {
@@ -81,12 +83,14 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         },
         timestamp: new Date().toISOString()
       })
+      lastNodeId = assistantNodeId
+      messages.push({ role: "assistant", content: response.output, toolCalls: response.toolCalls })
       if (response.stopReason === 'aborted') {
         console.log("stopping LLM due to aborting")
-        
+
         data.push({
-          id: randomBytes(4).toString(),
-          parentId: "randome abhi ke liye", // #TODO: implement tree and store prev node id here.
+          id: randomBytes(4).toString("hex"),
+          parentId: lastNodeId, // #TODO: implement tree and store prev node id here.
           type: "message",
           role: "assistant",
           message: {
@@ -103,8 +107,8 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
       if(response.stopReason === 'error'){
         console.log("stopping LLM due to error")
         data.push({
-          id: randomBytes(4).toString(),
-          parentId: "randome abhi ke liye", // #TODO: implement tree and store prev node id here.
+          id: randomBytes(4).toString("hex"),
+          parentId: lastNodeId, // #TODO: implement tree and store prev node id here.
           type: "message",
           role: "assistant",
           message: {
@@ -127,62 +131,57 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         // context!.push({//   role: "assistant",
         //   content: response.output_text
         // })
-        // 2. execute each requested tool
+        // 2. execute each requested tool, in parallel — mirrors how Pi/Claude Code run tool calls.
         if(response.toolCalls){
-          for(const call of response.toolCalls){
+          const results = await Promise.all(response.toolCalls.map(async (call) => {
             try{
+              let result: string
               switch(call.name){
                 case "read":
-                  ToolResult = await readFileTool.execute(call.input)
+                  result = await readFileTool.execute(call.input)
                   break;
                 case "write":
-                  ToolResult = await writeFileTool.execute(call.input)
+                  result = await writeFileTool.execute(call.input)
                   break;
                 case "edit":
-                  ToolResult = await editFileTool.execute(call.input)
+                  result = await editFileTool.execute(call.input)
                   break;
                 case "bash":
-                  ToolResult = await bashTool.execute(call.input)
+                  result = await bashTool.execute(call.input)
                   break;
-  
+
                 default:
-                  ToolResult = `Unknown tool: ${call.name}`
+                  result = `Unknown tool: ${call.name}`
               }
-              data.push({
-                id: randomBytes(4).toString(),
-                parentId: "asdf", // #TODO: implement tree and store prev node id here.
-                timestamp: new Date().toISOString(),
-                type: "message",
-                role: "toolCall",
-                message:{
-                  toolName: call.name,
-                  content: {
-                    text: ToolResult,
-                    isError: false,
-                    timestamp: new Date().getTime()
-                  }
-                }
-              })
+              return { call, result, isError: false }
             }
             catch(e){
-              data.push({
-                id: randomBytes(4).toString(),
-                parentId: "asdf", // #TODO: implement tree and store prev node id here.
-                timestamp: new Date().toISOString(),
-                type: "message",
-                role: "toolCall",
-                message:{
-                  toolName: call.name,
-                  content: {
-                    text: ToolResult,
-                    isError: true,
-                    timestamp: new Date().getTime()
-                  }
-                }
-              })
+              const message = e instanceof Error ? e.message : String(e)
+              return { call, result: `Error executing ${call.name}: ${message}`, isError: true }
             }
-            console.log(ToolResult, " is the result")
-            
+          }))
+
+          for (const { call, result, isError } of results) {
+            ToolResult = result
+            const toolNodeId = randomBytes(4).toString("hex")
+            data.push({
+              id: toolNodeId,
+              parentId: lastNodeId, // #TODO: implement tree and store prev node id here.
+              timestamp: new Date().toISOString(),
+              type: "message",
+              role: "toolCall",
+              message:{
+                toolName: call.name,
+                content: {
+                  text: result,
+                  isError,
+                  timestamp: new Date().getTime()
+                }
+              }
+            })
+            lastNodeId = toolNodeId
+            messages.push({ role: "tool", toolCallId: call.id, name: call.name, content: result })
+            console.log(result, " is the result")
           }
         }
 
@@ -214,17 +213,6 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
         // 'completed' — push assistant message to context
         hasMoreToolCalls = false
         finalOutput = response.output
-        data.push({
-        id: randomBytes(4).toString(),
-        parentId: "random id for now",
-        type: 'message',
-        role: 'assistant',
-        message: {
-          content: response.output
-        },
-        timestamp: new Date().toISOString()
-      })
-
       }
       // hasMoreToolCalls = false; // temp cond
     }
@@ -252,9 +240,9 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
   }
 }
 const availableTools: ToolName[] = ["bash", "edit", "read", "write"]
-async function streamLLM(req: AgentRequest, relevantMemories: string): Promise<LLMResponse> {
+async function streamLLM(req: AgentRequest, messages: ChatMessage[], relevantMemories: string): Promise<LLMResponse> {
   // TODO: apply context if configured
-  // convert to LLM compatible msgs. ~ not needed in our case. 
+  // convert to LLM compatible msgs. ~ not needed in our case.
   // build LLM context, system, user prompt and tools
   let updatedSysPrompt = systemPrompt;
   if(relevantMemories !== ""){
@@ -262,7 +250,7 @@ async function streamLLM(req: AgentRequest, relevantMemories: string): Promise<L
   }
   const llmContext: LLMContext = {
     systemPrompt: updatedSysPrompt,
-    content: req.message,
+    messages,
     tools: availableTools
   }
   const llmReq: LLMRequest = { ...req, llmContext }

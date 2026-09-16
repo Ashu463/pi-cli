@@ -5,9 +5,7 @@ import path from 'path'
 export async function ReadFile(input: Record<string, unknown>): Promise<string> {
   const filePath: string = input.path as string
   try {
-    const content = JSON.parse(fs.readFileSync(filePath, "utf-8"))
-    
-    return content
+    return fs.readFileSync(filePath, "utf-8")
   } catch (e: any) {
     return `Error reading file: ${e.message}`
   }
@@ -35,7 +33,7 @@ export async function EditFile(input: Record<string, unknown>): Promise<string> 
   const newStr = input.new_string as string
 
   try {
-    const content = JSON.parse(fs.readFileSync(filePath, "utf-8"))
+    const content = fs.readFileSync(filePath, "utf-8")
 
     const occurrences = content.split(oldStr).length - 1
     if (occurrences === 0) {
@@ -54,44 +52,31 @@ export async function EditFile(input: Record<string, unknown>): Promise<string> 
   }
 }
 
+const BASH_TIMEOUT_MS = 30_000
+const BASH_MAX_OUTPUT_LEN = 20_000
+
 export async function Bash(input: Record<string, unknown>): Promise<string> {
   const command = input.command as string
   const cwd = (input.cwd as string) ?? process.cwd()
 
   try {
-    // const process = Bun.spawn(["bash", "-c", command], {
-    //   cwd,
-    //   stdout: "pipe",
-    //   stderr: "pipe"
-    // })
-
-    // const timeout = setTimeout(() => process.kill(), 30000)
-
-    // const [stdout, stderr, exitCode] = await Promise.all([
-    //   new Response(process.stdout).text(),
-    //   new Response(process.stderr).text(),
-    //   process.exited
-    // ])
-
-    // clearTimeout(timeout)
-
-    // const MAX_LEN = 20_000
-    // let output = stdout + (stderr ? `\n[stderr]\n${stderr}` : "")
-    // if (output.length > MAX_LEN) {
-    //   output = output.slice(0, MAX_LEN) + `\n... [truncated]`
-    // }
-
-    // return `Exit code: ${exitCode}\n${output}`
     const process = Bun.spawnSync({
         cmd: ["bash", "-c", command],
-        cwd: cwd, 
+        cwd: cwd,
         stdout: "pipe",
-        stderr: "pipe"
+        stderr: "pipe",
+        timeout: BASH_TIMEOUT_MS
     })
     let output = new TextDecoder().decode(process.stdout)
     const stdErr = new TextDecoder().decode(process.stderr)
     if(stdErr){
         output += stdErr
+    }
+    if (output.length > BASH_MAX_OUTPUT_LEN) {
+      output = output.slice(0, BASH_MAX_OUTPUT_LEN) + `\n... [truncated]`
+    }
+    if (process.signalCode === "SIGTERM") {
+      return `Command timed out after ${BASH_TIMEOUT_MS}ms\n${output}`
     }
     return `Exit code: ${process.exitCode} \n ${output}`
   } catch (e: any) {
