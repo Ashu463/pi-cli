@@ -1,0 +1,8 @@
+import { createCliRenderer } from "@opentui/core"
+import { createRoot } from "@opentui/react"
+import { App } from "./src/App"
+
+export async function runTui() {
+  const renderer = await createCliRenderer({ exitOnCtrlC: true })
+  createRoot(renderer).render(<App />)
+}

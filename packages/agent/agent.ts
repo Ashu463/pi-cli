@@ -177,32 +177,38 @@ export async function AgentCall(req: AgentRequest): Promise<AgentResponse>{
               if (DESTRUCTIVE_TOOLS.has(call.name) && req.confirmTool) {
                 const approved = await req.confirmTool(call)
                 if (!approved) {
-                  return { call, result: `User declined to run tool "${call.name}". Do not retry it without asking again.`, isError: true }
+                  const result = `User declined to run tool "${call.name}". Do not retry it without asking again.`
+                  req.onToolResult?.(call, result, true)
+                  return { call, result, isError: true }
                 }
               }
+              req.onToolCall?.(call)
               let result: string
               switch(call.name){
                 case "read":
-                  result = await readFileTool.execute(call.input)
+                  result = await readFileTool.execute(call.input, req.cwd)
                   break;
                 case "write":
-                  result = await writeFileTool.execute(call.input)
+                  result = await writeFileTool.execute(call.input, req.cwd)
                   break;
                 case "edit":
-                  result = await editFileTool.execute(call.input)
+                  result = await editFileTool.execute(call.input, req.cwd)
                   break;
                 case "bash":
-                  result = await bashTool.execute(call.input)
+                  result = await bashTool.execute(call.input, req.cwd)
                   break;
 
                 default:
                   result = `Unknown tool: ${call.name}`
               }
+              req.onToolResult?.(call, result, false)
               return { call, result, isError: false }
             }
             catch(e){
               const message = e instanceof Error ? e.message : String(e)
-              return { call, result: `Error executing ${call.name}: ${message}`, isError: true }
+              const result = `Error executing ${call.name}: ${message}`
+              req.onToolResult?.(call, result, true)
+              return { call, result, isError: true }
             }
           }))
 
@@ -312,5 +318,5 @@ async function streamLLM(req: AgentRequest, messages: ChatMessage[], relevantMem
   }
   const llmReq: LLMRequest = { ...req, llmContext }
 
-  return withRetry("LLM call", LLM_RETRY_ATTEMPTS, () => LLMCall(llmReq))
+  return withRetry("LLM call", LLM_RETRY_ATTEMPTS, () => LLMCall(llmReq), req.onRetry)
 }

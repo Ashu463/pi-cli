@@ -8,6 +8,10 @@ export interface AgentRequest{
     cwd: string,
     confirmTool?: (call: ToolCall) => Promise<boolean>
     onToken?: (delta: string) => void
+    // tool call lifecycle — lets a UI show pending/success/error per call, not just the final result.
+    onToolCall?: (call: ToolCall) => void
+    onToolResult?: (call: ToolCall, result: string, isError: boolean) => void
+    onRetry?: (attempt: number, maxAttempts: number, error: string) => void
 }
 
 export interface LLMRequest{
@@ -46,7 +50,7 @@ export interface Tool {
   name: string
   description: string
   input_schema: Record<string, unknown>
-  execute: (input: Record<string, unknown>) => Promise<string>
+  execute: (input: Record<string, unknown>, cwd: string) => Promise<string>
 }
 export type Message = {
     role: "user" | "assistant"; 
