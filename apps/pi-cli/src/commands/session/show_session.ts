@@ -1,4 +1,4 @@
-import { getAllSessionByID, getAllSessions } from '@repo/core'
+import { getAllSessionByID, getAllSessions } from '@repo/agent'
 import { Command } from 'commander'
 import { sessionPath } from 'commands/config'
 import fs from 'fs'

@@ -2,7 +2,7 @@ import { Command } from "commander";
 import os from 'os'
 import path from 'path'
 import fs from 'fs'
-import { logger } from "@repo/core";
+import { logger } from "@repo/agent";
 import { authFile, modelsFile, rootPath } from "./config";
 
 fs.mkdirSync(rootPath, { recursive: true });

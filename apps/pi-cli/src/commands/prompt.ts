@@ -1,11 +1,11 @@
 import { Command } from "commander";
 import fs from 'fs'
-import { AgentCall, logger } from "@repo/core";
-import { AgentRequest, ToolCall } from "../../../../packages/core/models/model";
+import { AgentCall, logger } from "@repo/agent";
+import { AgentRequest, ToolCall } from "../../../../packages/agent/models/model";
 import { sessionPath, settingsFile } from "./config";
 import { randomUUID } from "crypto";
 import process from 'process'
-import { AgentResponse } from "../../../../packages/core/models/clientTypes";
+import { AgentResponse } from "../../../../packages/agent/models/clientTypes";
 import path from 'path'
 import os from 'os'
 import readline from 'readline/promises'

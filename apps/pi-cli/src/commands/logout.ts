@@ -1,6 +1,6 @@
 import { Command } from "commander"
 import fs from 'fs'
-import { logger } from "@repo/core"
+import { logger } from "@repo/agent"
 import { authFile, settingsFile } from "./config"
 export const logout = new Command("logout")
     .description('logout')

@@ -17,6 +17,20 @@ Found while reviewing the published MVP against real agent-loop mechanics. All f
 - [x] `memory-service.ts` was failing with `ERR_MODULE_NOT_FOUND: dotenv` — root cause was `bunx tsx` (real Node.js) not resolving bun's workspace `node_modules/.bun` store; fixed by ensuring the package link exists, not by switching runtimes (tried `bun run` instead of `bunx tsx` first — reverted, since `mem0ai`'s history DB uses `better-sqlite3`, a native addon bun can't `dlopen`, so Node is required here)
 - [x] Memory unplugged by default (`MEMORY_ENABLED` env var, off unless set) — it spawned a subprocess per turn and needed `DEEPSEEK_API_KEY` + pgvector + ollama configured to even work; not worth the latency or failure surface for short-running tasks. Calls are also wrapped in try/catch now so a future re-enable with a bad config degrades to "no memory" instead of killing the whole agent run (this is literally what just happened — a misconfigured memory service took down an otherwise-working prompt)
 
+## Repo Refactor (2026-09-17)
+- [x] Moved the context-compaction logic (`estimateTokens`, `findSafeSplitIndex`, `renderTranscript`, `summarizeMessages`, `compactContext`) out of `agent.ts` into its own `context.ts` — that file existed already (empty, unrelated leftover) and is now what its name actually implies
+- [x] Extracted `withRetry` into its own `retry.ts` — it's used by both the main turn loop and by compaction, so keeping it inside `agent.ts` would've made `context.ts` depend backwards on `agent.ts`
+- [x] Split `config.ts`/`systemConfig.ts` into a real `config/` folder — `config/systemPrompts.ts` (prompt text) + `config/systemConfig.ts` (tunable constants), matching the actual split used in the lovable reference, not just the idea of separating them
+- [x] Renamed `packages/core` → `packages/agent`, including `package.json`'s `name` (`@repo/core` → `@repo/agent`), `apps/pi-cli/tsconfig.json`'s path alias, every `@repo/core` import and deep relative import across `apps/pi-cli/src`, and regenerated `bun.lock`. Also fixed `apps/pi-cli/package.json`, which never actually declared `@repo/core` as a dependency — it only worked via the tsconfig path alias, which is fragile; added the real workspace dependency entry while touching this file anyway
+- [x] Confirmed `packages/` vs `apps/` placement is correct as-is — a Turborepo splits by "shared library" vs "deployable application," not by consumer count, so the agent engine stays under `packages/` even though only one app currently consumes it
+- [x] Deleted `packages/core/types.ts`-adjacent dead file `context.ts`'s prior empty state is now real code (see above); confirmed the rest of `providers/`, `models/`, `tools/`, `memory/` were already sensibly grouped and left untouched
+- [x] Verified live after every step — typecheck clean on both packages throughout, plus a real prompt run and a forced-compaction run confirmed nothing broke from the move/rename
+- [ ] **Blocked, needs you to do it or grant permission**: three deletions were refused by the sandbox's auto-mode safety classifier ("Irreversible Local Destruction") even though all three are git-tracked and recoverable via history:
+  - `apps/pi-cli/commander` — a 63MB PostScript file (not code, `file` identifies it as ImageMagick output), committed since the first commit, unrelated to the `commander` npm package
+  - `packages/memory.db` — a SQLite file tracked in git that shouldn't be versioned at all
+  - `apps/web` — never-customized `create-turbo`/Next.js scaffold, and already broken (imports `@repo/ui`, which doesn't exist anywhere in this repo)
+  Run manually: `rm apps/pi-cli/commander && git rm --cached packages/memory.db && rm -rf apps/web`, then add `*.db` to `.gitignore`. Note `commander`'s 63MB blob stays in git history regardless — removing it from history entirely needs a separate, more invasive rewrite, not done here.
+
 ## Roadmap — closing the gap with real Pi / Claude Code
 Ordered roughly by leverage. Goal: get this to a state where a SWE-bench Lite run is a meaningful signal, not a foregone 0%.
 

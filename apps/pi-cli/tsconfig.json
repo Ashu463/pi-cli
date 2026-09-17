@@ -9,8 +9,8 @@
     "noEmit": true,
     "baseUrl": "./src", // This must be specified if "paths" is.
     "paths": {
-      "@repo/core": ["packages/core/index.ts"],
-      "@repo/core/*": ["packages/core/*"]
+      "@repo/agent": ["packages/agent/index.ts"],
+      "@repo/agent/*": ["packages/agent/*"]
     }
   },
   "include": ["src/**/*.ts", "src/index.ts"]
