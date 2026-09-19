@@ -1,28 +1,53 @@
 {
-  "name": "@ashuk971/nive",
+  "name": "aeon-ai",
+  "version": "0.3.0",
   "type": "module",
-  "version": "0.2.1",
-  "devDependencies": {
-    "@types/bun": "latest"
+  "description": "AEON — your personal coding companion. A terminal AI coding agent with a TUI, tool use, and guardrails.",
+  "license": "MIT",
+  "author": "Ashu463",
+  "homepage": "https://github.com/Ashu463/pi-cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ashu463/pi-cli.git",
+    "directory": "apps/pi-cli"
+  },
+  "bugs": {
+    "url": "https://github.com/Ashu463/pi-cli/issues"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "cli",
+    "tui",
+    "coding-agent",
+    "llm",
+    "deepseek",
+    "openai",
+    "anthropic"
+  ],
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
-    "build": "bun build --target node src/index.ts --outfile dist/index.js --packages bundle"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
+    "build": "bun build --target node src/index.ts --outfile dist/index.js --external '@opentui/*' --external react",
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.104.1",
+    "@opentui/core": "^0.5.11",
+    "@opentui/react": "^0.5.11",
+    "react": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
     "@repo/agent": "workspace:*",
-    "axios": "^1.17.0",
-    "commander": "^15.0.0",
-    "dotenv": "^17.4.2"
+    "@repo/tui": "workspace:*"
   },
   "main": "dist/index.js",
   "bin": {
-    "nive": "./dist/index.js"
+    "aeon": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ]
 }

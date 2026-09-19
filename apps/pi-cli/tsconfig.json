@@ -4,13 +4,17 @@
     "module": "Preserve",
     "moduleResolution": "bundler",
     "strict": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@opentui/react",
     "types": ["bun"],
     "skipLibCheck": true,
     "noEmit": true,
     "baseUrl": "./src", // This must be specified if "paths" is.
     "paths": {
       "@repo/agent": ["packages/agent/index.ts"],
-      "@repo/agent/*": ["packages/agent/*"]
+      "@repo/agent/*": ["packages/agent/*"],
+      "@repo/tui": ["packages/tui/index.tsx"],
+      "@repo/tui/*": ["packages/tui/*"]
     }
   },
   "include": ["src/**/*.ts", "src/index.ts"]

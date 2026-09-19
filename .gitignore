@@ -38,3 +38,5 @@ yarn-error.log*
 *.pem
 
 *.db
+# npm pack artifacts
+*.tgz

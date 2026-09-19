@@ -5,18 +5,21 @@ import { logout } from './commands/logout';
 import { listModel } from './commands/listModels';
 import { setModel } from './commands/setModel';
 import { prompt } from './commands/prompt';
+import { tui, launchTui } from './commands/tui';
 
 const program = new Command();
 
 program
-  .name('nive')
-  .description('Nive — minimal agentic loop')
-  .version('0.1.0')
+  .name('aeon')
+  .description('AEON — your personal coding companion')
+  .version('0.3.0')
   .addCommand(login)
   .addCommand(logout)
   .addCommand(listModel)
   .addCommand(setModel)
   .addCommand(prompt)
-
+  .addCommand(tui)
+  // bare `aeon` opens the TUI; subcommands stay for config and scripting.
+  .action(launchTui)
 
 program.parse();

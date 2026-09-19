@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { spawnSync } from 'node:child_process'
 import { logger } from '../logger'
 import { BASH_TIMEOUT_MS, BASH_MAX_OUTPUT_LEN } from '../config/systemConfig'
 import { GuardrailError, assertBashAllowed, resolveWithinCwd } from '../guardrails'
@@ -62,25 +63,24 @@ export async function Bash(input: Record<string, unknown>, cwd: string): Promise
     assertBashAllowed(command)
     const workingDir = fs.realpathSync(path.resolve(cwd))
 
-    const proc = Bun.spawnSync({
-        cmd: ["bash", "-c", command],
+    // node:child_process rather than Bun.spawnSync so the published CLI runs on plain node too.
+    const proc = spawnSync("bash", ["-c", command], {
         cwd: workingDir,
-        stdout: "pipe",
-        stderr: "pipe",
-        timeout: BASH_TIMEOUT_MS
+        encoding: "utf-8",
+        timeout: BASH_TIMEOUT_MS,
+        maxBuffer: BASH_MAX_OUTPUT_LEN * 2
     })
-    let output = new TextDecoder().decode(proc.stdout)
-    const stdErr = new TextDecoder().decode(proc.stderr)
-    if(stdErr){
-        output += stdErr
+    let output = proc.stdout ?? ""
+    if(proc.stderr){
+        output += proc.stderr
     }
     if (output.length > BASH_MAX_OUTPUT_LEN) {
       output = output.slice(0, BASH_MAX_OUTPUT_LEN) + `\n... [truncated]`
     }
-    if (proc.signalCode === "SIGTERM") {
+    if (proc.signal === "SIGTERM") {
       return `Command timed out after ${BASH_TIMEOUT_MS}ms\n${output}`
     }
-    return `Exit code: ${proc.exitCode} \n ${output}`
+    return `Exit code: ${proc.status} \n ${output}`
   } catch (e) {
     return refusal(e, "Error executing command")!
   }

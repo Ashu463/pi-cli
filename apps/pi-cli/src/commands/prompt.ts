@@ -31,7 +31,8 @@ if(!fs.existsSync(cwd)){
     fs.mkdirSync(cwd, {recursive: true})
 }
 export const prompt = new Command("prompt")
-    .description('new prompt')
+    .alias("run")
+    .description('send a one-shot prompt without opening the TUI (scripting/CI)')
     .option('--p <prompt>', "prompt string")
     .option('--sessionName <sessionName>', "give the session name to use while continuing this prompt")
     .action((options) =>{
