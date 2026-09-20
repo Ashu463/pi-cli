@@ -26,10 +26,13 @@ jobs:
       - name: Build all platform binaries
         run: bash scripts/build-binaries.sh
 
+      # Must run under a pseudo-terminal: the logger takes a different code path when stderr is a
+      # TTY (pretty output), and that path crashed in every built binary while a plain piped run
+      # passed. `script -e` propagates the child's exit code so a crash fails the job.
       - name: Smoke test the linux binary this runner can actually execute
         run: |
           chmod +x release/aeon-linux-x64
-          ./release/aeon-linux-x64 --help
+          script -qec "./release/aeon-linux-x64 --help" /dev/null | grep -q "Usage: aeon"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2

@@ -3,6 +3,14 @@
 Your personal coding companion — an AI agent that lives in your terminal. It reads your files,
 edits them, runs commands, and asks before it touches anything destructive.
 
+**macOS / Linux** — a single standalone binary, nothing else to install (includes the UI):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ashu463/pi-cli/master/install.sh | bash
+```
+
+**Via npm** — works anywhere Node 18+ runs, but the UI additionally needs [Bun](#the-ui-needs-bun):
+
 ```bash
 npm i -g aeon-ai
 ```
