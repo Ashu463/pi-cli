@@ -1,14 +1,10 @@
 import { Command } from "commander"
 
-// Imported lazily so config commands (login/set/list) don't pay the cost of booting the
-// terminal renderer, and so they still work on a machine where the TUI can't start.
 export async function launchTui(): Promise<void> {
   try {
     const { runTui } = await import("@repo/tui")
     await runTui()
   } catch (e) {
-    // OpenTUI renders through a native FFI library that currently only loads under Bun —
-    // its node entry point throws "native FFI is not available for this runtime yet".
     const message = e instanceof Error ? e.message : String(e)
     if (/FFI|render library/i.test(message)) {
       console.error(
