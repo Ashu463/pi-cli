@@ -38,6 +38,7 @@
     "react": "^19.2.0"
   },
   "devDependencies": {
+    "commander": "^15.0.0",
     "@types/bun": "latest",
     "@repo/agent": "workspace:*",
     "@repo/tui": "workspace:*"
