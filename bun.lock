@@ -16,7 +16,7 @@
     },
     "apps/pi-cli": {
       "name": "aeon-ai",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "bin": {
         "aeon": "./dist/index.js",
       },

@@ -58,7 +58,20 @@ including `aeon run`, works on Node 18+ as normal.
 
 ## Guardrails
 
-AEON is deliberately confined to the directory you start it in:
+The first time you run AEON in a folder, it asks before touching anything:
+
+```
+AEON wants to read and edit files in:
+  /path/to/your/project
+
+Trust this folder?  [y/N]
+```
+
+This is separate from the per-action confirmations below — it's a one-time "may AEON operate
+here at all" check, remembered per folder (`~/.pi-cli/trusted-dirs.json`) so you're not asked
+again next time. Declining exits without reading anything.
+
+AEON is also deliberately confined to the directory you start it in:
 
 - File tools refuse anything outside that directory — traversal, absolute paths, and symlinks
   pointing out are all resolved and rejected

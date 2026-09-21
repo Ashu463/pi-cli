@@ -12,7 +12,7 @@ const program = new Command();
 program
   .name('aeon')
   .description('AEON — your personal coding companion')
-  .version('0.3.1')
+  .version('0.3.2')
   .addCommand(login)
   .addCommand(logout)
   .addCommand(listModel)

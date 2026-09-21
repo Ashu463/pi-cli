@@ -1,6 +1,6 @@
 {
   "name": "aeon-ai",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "description": "AEON — your personal coding companion. A terminal AI coding agent with a TUI, tool use, and guardrails.",
   "license": "MIT",

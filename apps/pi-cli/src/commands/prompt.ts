@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import fs from 'fs'
-import { AgentCall, logger } from "@repo/agent";
+import { AgentCall, logger, isDirectoryTrusted, trustDirectory } from "@repo/agent";
 import { AgentRequest, ToolCall } from "../../../../packages/agent/models/model";
 import { sessionPath, settingsFile } from "./config";
 import { randomUUID } from "crypto";
@@ -35,11 +35,24 @@ export const prompt = new Command("prompt")
     .description('send a one-shot prompt without opening the TUI (scripting/CI)')
     .option('--p <prompt>', "prompt string")
     .option('--sessionName <sessionName>', "give the session name to use while continuing this prompt")
-    .action((options) =>{
+    .action(async (options) =>{
         logger.debug({ options }, "prompt command hit")
         const prompt = options.p
         let sessionName: string = options.sessionName
-        
+
+        if (!isDirectoryTrusted(cwd)) {
+            const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+            const answer = await rl.question(
+                `\nAEON wants to read and edit files in:\n  ${cwd}\n\nTrust this folder? [y/N] `
+            )
+            rl.close()
+            if (answer.trim().toLowerCase() !== "y") {
+                console.log("Not trusted — exiting without running.")
+                return
+            }
+            trustDirectory(cwd)
+        }
+
         const obj = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'))
 
         const currTime = new Date().toISOString()

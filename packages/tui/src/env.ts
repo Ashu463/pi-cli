@@ -1,7 +1,7 @@
 import os from "os"
 import { spawnSync } from "node:child_process"
 
-export const VERSION = "0.3.1"
+export const VERSION = "0.3.2"
 
 export function displayCwd(): string {
   const cwd = process.cwd()

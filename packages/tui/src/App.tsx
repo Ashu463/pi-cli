@@ -1,12 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from "react"
 import { useKeyboard } from "@opentui/react"
-import { AgentCall } from "@repo/agent"
+import { AgentCall, isDirectoryTrusted, trustDirectory } from "@repo/agent"
 import type { AgentRequest, ToolCall } from "../../agent/models/model"
 import { ToolCallBlock } from "./components/ToolCallBlock"
 import { StatusLine } from "./components/StatusLine"
 import { PromptBox } from "./components/PromptBox"
 import { Footer } from "./components/Footer"
 import { Home } from "./components/Home"
+import { TrustGate } from "./components/TrustGate"
 import { loadSettings } from "./settings"
 import { theme } from "./theme"
 import type { LogEntry } from "./types"
@@ -41,6 +42,8 @@ function LogLine({ entry }: { entry: LogEntry }) {
 }
 
 export function App() {
+  const cwd = useMemo(() => process.cwd(), [])
+  const [trusted, setTrusted] = useState(() => isDirectoryTrusted(cwd))
   const settings = useMemo(() => loadSettings(), [])
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [running, setRunning] = useState(false)
@@ -146,6 +149,18 @@ export function App() {
     [running, settings, handleToken, handleToolCall, handleToolResult, handleRetry, handleConfirm]
   )
 
+  const handleTrustAnswer = useCallback(
+    (approved: boolean) => {
+      if (approved) {
+        trustDirectory(cwd)
+        setTrusted(true)
+      } else {
+        process.exit(0)
+      }
+    },
+    [cwd]
+  )
+
   const prompt = (
     <PromptBox
       onSubmit={handleSubmit}
@@ -157,7 +172,9 @@ export function App() {
 
   return (
     <box width="100%" height="100%" flexDirection="column" backgroundColor={theme.bg} padding={1}>
-      {entries.length === 0 ? (
+      {!trusted ? (
+        <TrustGate cwd={cwd} onAnswer={handleTrustAnswer} />
+      ) : entries.length === 0 ? (
         <Home>{prompt}</Home>
       ) : (
         <box flexGrow={1} width="100%" flexDirection="column">
