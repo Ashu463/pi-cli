@@ -1,4 +1,40 @@
-# PI-CLI
+# AEON
+
+Your personal coding companion — an AI agent that lives in your terminal, with a full terminal UI.
+It reads your files, edits them, runs commands, and asks before it touches anything.
+
+## Install
+
+**macOS / Linux** — one standalone binary, nothing else to install (includes the UI):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ashu463/pi-cli/master/install.sh | bash
+```
+
+It installs to `~/.aeon/bin/aeon` and tells you the one `PATH` line to add if you need it.
+
+**Any platform, via npm** (Node 18+):
+
+```bash
+npm i -g aeon-ai
+```
+
+The npm install runs everything, but the terminal UI itself additionally needs
+[Bun](https://bun.sh) (`curl -fsSL https://bun.sh/install | bash`) — without it, `aeon` points you
+there and `aeon run --p "..."` still works. **Windows** can't use the `curl` installer, so use npm.
+
+## Quick start
+
+```bash
+aeon login --provider deepseek --api_key sk-...   # or openai / anthropic
+aeon set --provider deepseek --model deepseek-chat
+aeon                                              # opens the UI
+```
+
+The first time you run it in a folder, AEON asks whether to trust that folder before reading
+anything. Full command list, guardrails and config: [`apps/pi-cli/README.md`](apps/pi-cli/README.md).
+
+---
 
 ## MVP
 - pi-cli commands through commander

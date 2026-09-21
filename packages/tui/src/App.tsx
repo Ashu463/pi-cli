@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react"
-import { useKeyboard } from "@opentui/react"
+import { useKeyboard, useRenderer } from "@opentui/react"
 import { AgentCall, isDirectoryTrusted, trustDirectory } from "@repo/agent"
 import type { AgentRequest, ToolCall } from "../../agent/models/model"
 import { ToolCallBlock } from "./components/ToolCallBlock"
@@ -42,6 +42,7 @@ function LogLine({ entry }: { entry: LogEntry }) {
 }
 
 export function App() {
+  const renderer = useRenderer()
   const cwd = useMemo(() => process.cwd(), [])
   const [trusted, setTrusted] = useState(() => isDirectoryTrusted(cwd))
   const settings = useMemo(() => loadSettings(), [])
@@ -155,10 +156,14 @@ export function App() {
         trustDirectory(cwd)
         setTrusted(true)
       } else {
+        // process.exit() alone skips the renderer's shutdown, leaving the terminal in raw mode with
+        // mouse tracking on — the shell then prints every mouse move as text ("35;65;7M…").
+        // destroy() switches those modes back off; only then is it safe to leave.
+        renderer.destroy()
         process.exit(0)
       }
     },
-    [cwd]
+    [cwd, renderer]
   )
 
   const prompt = (

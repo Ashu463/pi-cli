@@ -99,15 +99,25 @@ test("pressing y trusts the directory, persists it, and reveals the home screen"
     renderer.destroy()
   }))
 
-test("pressing n exits instead of trusting", () =>
+// regression: declining used to call process.exit(0) directly, which skips the renderer's shutdown
+// — the terminal stayed in raw mode with mouse tracking on, and the shell printed every mouse move
+// as text ("35;65;7M…"). The renderer must be destroyed *before* the process exits.
+test("pressing n exits instead of trusting, restoring the terminal first", () =>
   withIsolatedEnv(async (_dir, fakeHome) => {
     const { renderOnce, mockInput, renderer } = await testRender(<App />, { width: 110, height: 30 })
     await renderOnce()
 
-    const exitCalls: unknown[] = []
+    let destroyed = false
+    const realDestroy = renderer.destroy.bind(renderer)
+    renderer.destroy = () => {
+      destroyed = true
+      realDestroy()
+    }
+
+    const exitCalls: { code: unknown; rendererDestroyedFirst: boolean }[] = []
     const realExit = process.exit
     process.exit = ((code?: number) => {
-      exitCalls.push(code)
+      exitCalls.push({ code, rendererDestroyedFirst: destroyed })
     }) as typeof process.exit
     try {
       await mockInput.pressKeys(["n"])
@@ -117,9 +127,8 @@ test("pressing n exits instead of trusting", () =>
       process.exit = realExit
     }
 
-    expect(exitCalls).toEqual([0])
+    expect(exitCalls).toEqual([{ code: 0, rendererDestroyedFirst: true }])
     expect(fs.existsSync(path.join(fakeHome, ".pi-cli", "trusted-dirs.json"))).toBe(false)
-    renderer.destroy()
   }))
 
 test("an already-trusted directory skips the gate on next launch", () =>
