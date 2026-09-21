@@ -59,6 +59,10 @@ MVP published to npm
 
 ![publisher](image.png)
 
+AEON's home screen, running as the published `aeon-ai` CLI:
+
+![AEON home screen](aeon-tui.png)
+
 ## Releasing a new version
 
 Two separate publish paths, and the version has to be bumped for both before doing either.
